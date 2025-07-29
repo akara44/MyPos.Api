@@ -1,0 +1,298 @@
+﻿// ProductControllers.cs
+using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using MyPos.Infrastructure.Persistence;
+using MyPos.Application.Dtos;
+using MyPos.Domain.Entities;
+using MyPos.Application.Validators; // UpdateProductWithImageDto için bir validatorunuz olduğunu varsayıyorum
+using System;
+
+namespace MyPos.Api.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class ProductsController : ControllerBase
+    {
+        private readonly MyPosDbContext _context;
+        // Hem CreateProductDto hem de UpdateProductWithImageDto için validatorlara ihtiyacınız olabilir
+        private readonly IValidator<CreateProductDto> _createProductValidator;
+        private readonly IValidator<UpdateProductWithImageDto> _updateProductValidator;
+
+
+        public ProductsController(
+            MyPosDbContext context,
+            IValidator<CreateProductDto> createProductValidator,
+            IValidator<UpdateProductWithImageDto> updateProductValidator) // Update validator'ı enjekte edin
+        {
+            _context = context;
+            _createProductValidator = createProductValidator;
+            _updateProductValidator = updateProductValidator;
+        }
+
+        // Ürün Listeleme
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
+        {
+            var products = await _context.Products
+                .Include(p => p.ProductGroup) // Adını almak için ProductGroup'u dahil edin
+                .Select(p => new ProductResponseDto // Tutarlı çıktı için ProductResponseDto kullanın
+                {
+                    Id = p.Id,
+                    Barcode = p.Barcode,
+                    Name = p.Name,
+                    Stock = p.Stock,
+                    SalePrice = p.SalePrice,
+                    PurchasePrice = p.PurchasePrice,
+                    ProfitRate = p.ProfitRate, // Bu DTO'da hesaplanmış bir özelliktir, ele alındığından emin olun
+                    TaxRate = p.TaxRate,
+                    ProductGroupId = p.ProductGroupId, // ProductGroupId'yi dahil edin
+                    ProductGroupName = p.ProductGroup.Name, // ProductGroup Adını dahil edin
+                    ImageUrl = p.ImageUrl,
+                    CriticalStockLevel = p.CriticalStockLevel,
+                    SalePageList = p.SalePageList,
+                    Unit = p.Unit,
+                    OriginCountry = p.OriginCountry
+                })
+                .ToListAsync();
+
+            return Ok(products);
+        }
+
+        // Ürün Ekleme
+        [HttpPost]
+        public async Task<ActionResult<ProductResponseDto>> CreateProduct([FromBody] CreateProductDto dto)
+        {
+            var validationResult = await _createProductValidator.ValidateAsync(dto);
+            if (!validationResult.IsValid)
+            {
+                return BadRequest(validationResult.Errors);
+            }
+
+            // ProductGroup'un var olup olmadığını kontrol edin
+            var productGroup = await _context.ProductGroups.FindAsync(dto.ProductGroupId);
+            if (productGroup == null)
+            {
+                return BadRequest("Belirtilen ürün grubu bulunamadı.");
+            }
+
+            var product = new Product
+            {
+                Barcode = dto.Barcode,
+                Name = dto.Name,
+                Stock = dto.Stock,
+                CriticalStockLevel = dto.CriticalStockLevel,
+                SalePrice = dto.SalePrice,
+                PurchasePrice = dto.PurchasePrice,
+                TaxRate = dto.TaxRate,
+                SalePageList = dto.SalePageList,
+                ProductGroupId = dto.ProductGroupId, // ProductGroupId'yi atayın
+                Unit = dto.Unit,
+                OriginCountry = dto.OriginCountry
+            };
+
+            _context.Products.Add(product);
+            await _context.SaveChangesAsync();
+
+            var response = new ProductResponseDto
+            {
+                Id = product.Id,
+                Barcode = product.Barcode,
+                Name = product.Name,
+                Stock = product.Stock,
+                SalePrice = product.SalePrice,
+                PurchasePrice = product.PurchasePrice,
+                ProfitRate = product.ProfitRate,
+                TaxRate = product.TaxRate,
+                ProductGroupId = product.ProductGroupId,
+                ProductGroupName = productGroup.Name // Yanıt için ProductGroupName'i ayarlayın
+            };
+
+            return CreatedAtAction(
+                actionName: nameof(GetProductByBarcode),
+                routeValues: new { barcode = product.Barcode },
+                value: response);
+        }
+
+        // Resim Yükleme (burada değişiklik gerekmez, sadece mevcut ürün için resim yüklemeyi işler)
+        [HttpPost("{id}/upload-image")]
+        public async Task<IActionResult> UploadImage(int id, IFormFile file)
+        {
+            var product = await _context.Products.FindAsync(id);
+            if (product == null)
+                return NotFound("Ürün bulunamadı.");
+
+            if (file == null || file.Length == 0)
+                return BadRequest("Geçerli bir dosya seçilmedi.");
+
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (extension != ".jpg" && extension != ".jpeg" && extension != ".png")
+                return BadRequest("Sadece .jpg, .jpeg veya .png dosyaları yüklenebilir.");
+
+            var fileName = $"{Guid.NewGuid()}{extension}";
+            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
+            var fullPath = Path.Combine(folderPath, fileName);
+
+            if (!Directory.Exists(folderPath))
+                Directory.CreateDirectory(folderPath);
+
+            using (var stream = new FileStream(fullPath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            product.ImageUrl = $"/images/{fileName}";
+            await _context.SaveChangesAsync();
+
+            return Ok(new { imageUrl = product.ImageUrl });
+        }
+
+        // Ürün Güncelleme
+        [HttpPut("{id}")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<ProductResponseDto>> UpdateProduct(int id, [FromForm] UpdateProductWithImageDto dto)
+        {
+            var validationResult = await _updateProductValidator.ValidateAsync(dto); // Doğru validator'ı kullanın
+            if (!validationResult.IsValid)
+            {
+                return BadRequest(validationResult.Errors);
+            }
+
+            var product = await _context.Products.Include(p => p.ProductGroup).FirstOrDefaultAsync(p => p.Id == id); // Yanıt için ProductGroup'u dahil edin
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            // Yeni ProductGroup güncelleniyorsa var olup olmadığını kontrol edin
+            if (product.ProductGroupId != dto.ProductGroupId) // Yalnızca ID farklıysa kontrol edin
+            {
+                var newProductGroup = await _context.ProductGroups.FindAsync(dto.ProductGroupId);
+                if (newProductGroup == null)
+                {
+                    return BadRequest("Belirtilen yeni ürün grubu bulunamadı.");
+                }
+                product.ProductGroup = newProductGroup; // Gezinme özelliğini doğrudan güncelleyin veya ProductGroupId'yi atayın
+            }
+
+            product.Barcode = dto.Barcode;
+            product.Name = dto.Name;
+            product.Stock = dto.Stock;
+            product.CriticalStockLevel = dto.CriticalStockLevel;
+            product.SalePrice = dto.SalePrice;
+            product.PurchasePrice = dto.PurchasePrice;
+            product.TaxRate = dto.TaxRate;
+            product.SalePageList = dto.SalePageList;
+            product.ProductGroupId = dto.ProductGroupId; // ProductGroupId'yi güncelleyin
+            product.Unit = dto.Unit;
+            product.OriginCountry = dto.OriginCountry;
+
+            // ✅ Resim güncelleme varsa
+            if (dto.ImageFile != null && dto.ImageFile.Length > 0)
+            {
+                var extension = Path.GetExtension(dto.ImageFile.FileName).ToLowerInvariant();
+                if (extension != ".jpg" && extension != ".jpeg" && extension != ".png")
+                    return BadRequest("Sadece .jpg, .jpeg veya .png dosyaları kabul edilir.");
+
+                // Eski dosyayı sil
+                if (!string.IsNullOrEmpty(product.ImageUrl))
+                {
+                    var oldPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", product.ImageUrl.TrimStart('/'));
+                    if (System.IO.File.Exists(oldPath))
+                        System.IO.File.Delete(oldPath);
+                }
+
+                var fileName = $"{Guid.NewGuid()}{extension}";
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
+                var fullPath = Path.Combine(folderPath, fileName);
+
+                if (!Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    await dto.ImageFile.CopyToAsync(stream);
+                }
+
+                product.ImageUrl = $"/images/{fileName}";
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new ProductResponseDto
+            {
+                Id = product.Id,
+                Barcode = product.Barcode,
+                Name = product.Name,
+                Stock = product.Stock,
+                SalePrice = product.SalePrice,
+                PurchasePrice = product.PurchasePrice,
+                ProfitRate = product.ProfitRate,
+                TaxRate = product.TaxRate,
+                ProductGroupId = product.ProductGroupId,
+                ProductGroupName = product.ProductGroup.Name // Yanıt için ProductGroupName'i ayarlayın
+            });
+        }
+
+
+        // Ürün Silme (burada değişiklik gerekmez)
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteProduct(int id)
+        {
+            var product = await _context.Products.FindAsync(id);
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            _context.Products.Remove(product);
+            await _context.SaveChangesAsync();
+
+            return NoContent(); // 204
+        }
+
+        // ID ile Ürün Sorgulama
+        [HttpGet("id/{id}", Name = "GetProductById")]
+        public async Task<ActionResult<ProductResponseDto>> GetProductById(int id)
+        {
+            var product = await _context.Products.Include(p => p.ProductGroup).FirstOrDefaultAsync(p => p.Id == id);
+            if (product == null) return NotFound();
+
+            return Ok(new ProductResponseDto
+            {
+                Id = product.Id,
+                Barcode = product.Barcode,
+                Name = product.Name,
+                Stock = product.Stock,
+                SalePrice = product.SalePrice,
+                PurchasePrice = product.PurchasePrice,
+                ProfitRate = product.ProfitRate,
+                TaxRate = product.TaxRate,
+                ProductGroupId = product.ProductGroupId,
+                ProductGroupName = product.ProductGroup.Name // ProductGroup Adını dahil edin
+            });
+        }
+
+        // Barkod ile Ürün Sorgulama
+        [HttpGet("barcode/{barcode}", Name = "GetProductByBarcode")]
+        public async Task<ActionResult<ProductResponseDto>> GetProductByBarcode(string barcode)
+        {
+            var product = await _context.Products.Include(p => p.ProductGroup).FirstOrDefaultAsync(p => p.Barcode == barcode);
+            if (product == null) return NotFound();
+
+            return Ok(new ProductResponseDto
+            {
+                Id = product.Id,
+                Barcode = product.Barcode,
+                Name = product.Name,
+                Stock = product.Stock,
+                SalePrice = product.SalePrice,
+                PurchasePrice = product.PurchasePrice,
+                ProfitRate = product.ProfitRate,
+                TaxRate = product.TaxRate,
+                ProductGroupId = product.ProductGroupId,
+                ProductGroupName = product.ProductGroup.Name // ProductGroup Adını dahil edin
+            });
+        }
+    }
+}
