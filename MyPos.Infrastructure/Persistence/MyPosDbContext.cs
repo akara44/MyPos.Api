@@ -11,6 +11,8 @@ namespace MyPos.Infrastructure.Persistence
         public DbSet<User> Users { get; set; }
         public DbSet<Product> Products { get; set; }
         public DbSet<ProductGroup> ProductGroups { get; set; }
+        public DbSet<VariantType> VariantTypes { get; set; } // Yeni eklendi
+        public DbSet<VariantValue> VariantValues { get; set; } // Yeni eklendi
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -20,14 +22,20 @@ namespace MyPos.Infrastructure.Persistence
                 .HasOne(pg => pg.ParentGroup)
                 .WithMany(pg => pg.SubGroups)
                 .HasForeignKey(pg => pg.ParentGroupId)
-                .OnDelete(DeleteBehavior.Restrict); // Özyinelemeli silmeyi engeller
+                .OnDelete(DeleteBehavior.Restrict);
 
-            // Product ve ProductGroup arasındaki ilişkiyi yapılandırın
             modelBuilder.Entity<Product>()
-                .HasOne(p => p.ProductGroup) // Bir Ürünün bir Ürün Grubu vardır
-                .WithMany() // Bir Ürün Grubunun birçok Ürünü olabilir (ProductGroup'ta Ürünler için gezinme özelliğine gerek yok)
-                .HasForeignKey(p => p.ProductGroupId) // Yabancı anahtar ProductGroupId'dir
-                .OnDelete(DeleteBehavior.Restrict); // Ürün grubunun, ona bağlı ürünler varsa silinmesini engeller
+                .HasOne(p => p.ProductGroup)
+                .WithMany()
+                .HasForeignKey(p => p.ProductGroupId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // VariantType ve VariantValue arasındaki ilişkiyi yapılandırın
+            modelBuilder.Entity<VariantValue>()
+                .HasOne(vv => vv.VariantType)
+                .WithMany(vt => vt.VariantValues)
+                .HasForeignKey(vv => vv.VariantTypeId)
+                .OnDelete(DeleteBehavior.Restrict); // Varyant tipi silinirken bağlı değerlerin kalmasını engeller veya kısıtlar
         }
     }
 }

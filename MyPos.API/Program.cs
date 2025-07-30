@@ -20,6 +20,10 @@ builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>(); // Özel validator'ları kaydet
 builder.Services.AddValidatorsFromAssemblyContaining<ProductGroupValidator>();
+builder.Services.AddScoped<IValidator<CreateVariantTypeDto>, CreateVariantTypeDtoValidator>();
+builder.Services.AddScoped<IValidator<UpdateVariantTypeDto>, UpdateVariantTypeDtoValidator>();
+builder.Services.AddScoped<IValidator<CreateVariantValueDto>, CreateVariantValueDtoValidator>();
+builder.Services.AddScoped<IValidator<UpdateVariantValueDto>, UpdateVariantValueDtoValidator>();
 // 3. JWT Authentication 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new Exception("JWT key is missing!");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
