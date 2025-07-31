@@ -3,9 +3,10 @@ using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using MyPos.Infrastructure.Persistence;
-using MyPos.Application.Validators;
 using MyPos.Application.Dtos;
+using MyPos.Application.DTOs;
+using MyPos.Application.Validators;
+using MyPos.Infrastructure.Persistence;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,7 +37,7 @@ builder.Services.AddScoped<IValidator<UpdateProductVariantDto>, UpdateProductVar
 // YENİ EKLENEN: UpdateProductWithImageDto için validator (ProductsController'da kullanıldığı için)
 builder.Services.AddScoped<IValidator<UpdateProductWithImageDto>, UpdateProductWithImageDtoValidator>();
 
-
+builder.Services.AddScoped<AbstractValidator<CompanyDto>, CompanyValidator>();
 // 3. JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new Exception("JWT key is missing!");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

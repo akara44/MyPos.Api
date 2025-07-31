@@ -17,11 +17,14 @@ namespace MyPos.Infrastructure.Persistence
         public DbSet<ProductVariant> ProductVariants { get; set; }
         public DbSet<ProductVariantValue> ProductVariantValues { get; set; }
         public DbSet<Personnel> Personnel { get; set; }
+        public DbSet<Company> Company { get; set; }
+
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-
+            
             modelBuilder.Entity<ProductGroup>()
                 .HasOne(pg => pg.ParentGroup)
                 .WithMany(pg => pg.SubGroups)
@@ -39,7 +42,7 @@ namespace MyPos.Infrastructure.Persistence
                 .WithMany(vt => vt.VariantValues)
                 .HasForeignKey(vv => vv.VariantTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
-
+             
             // Yeni Varyant İlişkileri
             modelBuilder.Entity<ProductVariant>()
                 .HasOne(pv => pv.Product)
