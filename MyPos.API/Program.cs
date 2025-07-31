@@ -91,7 +91,7 @@ app.UseCors("AllowVueApp");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
+ 
 // 7. Otomatik Migration (Opsiyonel - Development için)
 using (var scope = app.Services.CreateScope())
 {

@@ -16,6 +16,7 @@ namespace MyPos.Infrastructure.Persistence
         // Yeni eklenenler
         public DbSet<ProductVariant> ProductVariants { get; set; }
         public DbSet<ProductVariantValue> ProductVariantValues { get; set; }
+        public DbSet<Personnel> Personnel { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
