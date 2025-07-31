@@ -10,21 +10,34 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. DbContext Konfigürasyonu 
+// 1. DbContext Konfigürasyonu
 builder.Services.AddDbContext<MyPosDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 2. FluentValidation 
+// 2. FluentValidation
 builder.Services.AddControllers();
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
-builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>(); // Özel validator'ları kaydet
+
+// Mevcut validator'ları kaydet
+builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>(); // ProductValidator ve ProductGroupValidator buraya eklendi
 builder.Services.AddValidatorsFromAssemblyContaining<ProductGroupValidator>();
+
+// VariantType ve VariantValue için mevcut validator'lar
 builder.Services.AddScoped<IValidator<CreateVariantTypeDto>, CreateVariantTypeDtoValidator>();
 builder.Services.AddScoped<IValidator<UpdateVariantTypeDto>, UpdateVariantTypeDtoValidator>();
 builder.Services.AddScoped<IValidator<CreateVariantValueDto>, CreateVariantValueDtoValidator>();
 builder.Services.AddScoped<IValidator<UpdateVariantValueDto>, UpdateVariantValueDtoValidator>();
-// 3. JWT Authentication 
+
+// YENİ EKLENEN: ProductVariant DTO'ları için validator'lar
+builder.Services.AddScoped<IValidator<CreateProductVariantDto>, CreateProductVariantDtoValidator>();
+builder.Services.AddScoped<IValidator<UpdateProductVariantDto>, UpdateProductVariantDtoValidator>();
+
+// YENİ EKLENEN: UpdateProductWithImageDto için validator (ProductsController'da kullanıldığı için)
+builder.Services.AddScoped<IValidator<UpdateProductWithImageDto>, UpdateProductWithImageDtoValidator>();
+
+
+// 3. JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new Exception("JWT key is missing!");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -38,7 +51,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// 4. CORS Konfigürasyonu(Frontend için eklendi)
+// 4. CORS Konfigürasyonu (Frontend için eklendi)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowVueApp", policy =>
@@ -65,8 +78,15 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// DİKKAT: Eğer "AllowVueApp" politikasını kullanıyorsanız, "AllowFrontend" politikasına ihtiyacınız olmayabilir.
+// Eğer "AllowFrontend" politikasını tanımlamadıysanız veya kullanmıyorsanız bu satırı kaldırabilirsiniz.
+// app.UseCors("AllowFrontend");
 
-app.UseCors("AllowFrontend");
+app.UseStaticFiles(); // wwwroot klasöründeki statik dosyalara erişim için
+app.UseRouting();
+
+// CORS politikası UseRouting() çağrısından sonra, UseAuthentication() ve UseAuthorization() çağrılarından önce gelmelidir.
+app.UseCors("AllowVueApp");
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -76,15 +96,9 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<MyPosDbContext>();
+    // Uygulama her başladığında bekleyen tüm migrasyonları uygular.
+    // Üretim ortamında dikkatli kullanılmalıdır.
     db.Database.Migrate();
 }
 
-
-
-
-app.UseStaticFiles();
-app.UseRouting();
-app.UseCors("AllowVueApp"); // CORS burada aktifleşir
-app.UseAuthorization();
-app.MapControllers();
 app.Run();

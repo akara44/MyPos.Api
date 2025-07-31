@@ -1,4 +1,4 @@
-﻿// Product.cs
+﻿// Product.cs (Güncellenmiş Kısım)
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -17,7 +17,7 @@ namespace MyPos.Domain.Entities
         [StringLength(100)]
         public string Name { get; set; } = string.Empty;
 
-        public int Stock { get; set; }
+        public int Stock { get; set; } // Bu artık sadece ana ürünün genel stoğu olabilir, varyantların kendi stoğu olacak
         public int CriticalStockLevel { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
@@ -34,8 +34,7 @@ namespace MyPos.Domain.Entities
         [StringLength(50)]
         public string SalePageList { get; set; } = "Liste1";
 
-        // Burayı değiştirin: string olan ProductGroup'u int ProductGroupId yapın
-        public int? ProductGroupId { get; set; } // int? yaparak nullable hale getiriyoruz
+        public int? ProductGroupId { get; set; }
         public ProductGroup? ProductGroup { get; set; }
 
         [StringLength(20)]
@@ -45,5 +44,8 @@ namespace MyPos.Domain.Entities
         public string OriginCountry { get; set; } = "Türkiye";
 
         public string? ImageUrl { get; set; }
+
+        // Yeni eklenen: Bu ürüne ait varyantlar
+        public ICollection<ProductVariant> ProductVariants { get; set; } = new List<ProductVariant>();
     }
 }
