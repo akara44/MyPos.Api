@@ -73,6 +73,7 @@ public class ExpenseController : ControllerBase
         expense.PaymentType = dto.PaymentType;
         expense.TypeId = dto.TypeId;
         expense.Date = dto.Date;
+       
 
         await _context.SaveChangesAsync();
 
