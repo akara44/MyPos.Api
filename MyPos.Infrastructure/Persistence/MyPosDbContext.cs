@@ -21,6 +21,11 @@ namespace MyPos.Infrastructure.Persistence
 
         public DbSet<PaymentType> PaymentTypes { get; set; }
 
+        public DbSet<ExpenseIncomeType> ExpenseIncomeTypes { get; set; }
+
+        public DbSet<Expense> Expenses { get; set; }
+        public DbSet<Income> Incomes { get; set; }
+
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

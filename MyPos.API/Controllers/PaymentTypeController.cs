@@ -5,7 +5,7 @@ using MyPos.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Validators;
 
-namespace YourProjectNamespace.Controllers
+namespace MyPos.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
