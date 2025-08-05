@@ -91,4 +91,112 @@ public class IncomeController : ControllerBase
 
         return Ok(new { message = "Income deleted successfully." });
     }
+    [HttpGet("filtered-list")]
+    public async Task<IActionResult> GetFilteredIncomes(
+    [FromQuery] DateTime? startDate,
+    [FromQuery] DateTime? endDate,
+    [FromQuery] string? paymentType,
+    [FromQuery] int? typeId)
+    {
+        var query = _context.Incomes
+            .Include(x => x.Type) // Type bilgisini de çekmek için
+            .AsQueryable();
+
+        // Filtreleme mantığı aynı şekilde uygulanır
+        if (startDate.HasValue)
+        {
+            query = query.Where(i => i.Date.Date >= startDate.Value.Date);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(i => i.Date.Date <= endDate.Value.Date);
+        }
+
+        if (!string.IsNullOrEmpty(paymentType))
+        {
+            query = query.Where(i => i.PaymentType == paymentType);
+        }
+
+        if (typeId.HasValue)
+        {
+            query = query.Where(i => i.TypeId == typeId.Value);
+        }
+
+        // Filtrelenmiş gelir listesini al
+        var filteredIncomes = await query.Select(x => new
+        {
+            x.Id,
+            x.Amount,
+            x.Description,
+            x.PaymentType,
+            x.Date,
+            Type = x.Type.Name
+        }).ToListAsync();
+
+        // Toplam hesaplamaları da burada yapıp tek bir nesne içinde döndürebilirsiniz
+        //var totalIncome = filteredIncomes.Sum(i => i.Amount);
+        //var cashTotal = filteredIncomes.Where(i => i.PaymentType == "NAKİT").Sum(i => i.Amount);
+        //var posTotal = filteredIncomes.Where(i => i.PaymentType == "POS").Sum(i => i.Amount);
+
+        return Ok(new
+        {
+            //TotalIncome = totalIncome,
+            //CashTotal = cashTotal,
+            //PosTotal = posTotal,
+            Incomes = filteredIncomes // Filtrelenmiş listeyi de ekle
+        });
+    }
+    [HttpGet("total-income")]
+    public async Task<IActionResult> GetTotalIncome()
+    {
+        // Veritabanındaki tüm gelirleri çekiyoruz
+        var allIncomes = await _context.Incomes.ToListAsync();
+
+        // Toplam gelirleri hesaplıyoruz
+        var totalIncome = allIncomes.Sum(i => i.Amount);
+
+        // Nakit gelirlerin toplamını hesaplıyoruz
+        var cashTotal = allIncomes
+            .Where(i => i.PaymentType == "NAKİT")
+            .Sum(i => i.Amount);
+
+        // POS gelirlerinin toplamını hesaplıyoruz (kredi kartı da dahil)
+        var posTotal = allIncomes
+            .Where(i => i.PaymentType == "POS" || i.PaymentType == "KREDİ KARTI")
+            .Sum(i => i.Amount);
+
+        // Sonuçları tek bir nesne olarak döndürüyoruz
+        var totals = new
+        {
+            TotalIncome = totalIncome,
+            CashTotal = cashTotal,
+            PosTotal = posTotal
+        };
+
+        return Ok(totals);
+    }
+    [HttpGet("income-by-type")]
+    public async Task<IActionResult> GetIncomeByType()
+    {
+        // Veritabanındaki tüm gelirleri tür bilgisiyle birlikte çekiyoruz
+        // .Include(i => i.Type) ile Income'a bağlı olan ExpenseIncomeType bilgisini de alıyoruz.
+        var incomeData = await _context.Incomes
+            .Include(i => i.Type)
+            .ToListAsync();
+
+        // Verileri gruplara ayırıp her grubun toplamını hesaplıyoruz
+        var groupedData = incomeData
+            .GroupBy(i => i.Type.Name) // Gelir türünün adına göre gruplama yapıyoruz
+            .Select(g => new
+            {
+                Type = g.Key, // Grubun adı (örneğin: "Alacak", "Borç")
+                TotalAmount = g.Sum(i => i.Amount) // Bu gruba ait toplam miktar
+            })
+            .ToList();
+
+        // Sonuçları JSON formatında döndürüyoruz
+        // Bu veri, frontend'de grafik çizmek için kullanılacak
+        return Ok(groupedData);
+    }
 }
