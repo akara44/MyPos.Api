@@ -17,7 +17,7 @@ namespace MyPos.Domain.Entities
         [StringLength(100)]
         public string Name { get; set; } = string.Empty;
 
-        public int Stock { get; set; } // Bu artık sadece ana ürünün genel stoğu olabilir, varyantların kendi stoğu olacak
+        public int Stock { get; set; } 
         public int CriticalStockLevel { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
