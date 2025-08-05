@@ -89,21 +89,33 @@ public class ProductGroupController : ControllerBase
         if (productGroup == null)
             return NotFound("Ürün grubu bulunamadı.");
 
-        // Alt grupların ParentGroupId'sini null yapıyoruz
+        // Alt grupların ParentGroupId'sini null yap
         if (productGroup.SubGroups != null && productGroup.SubGroups.Any())
         {
             foreach (var subGroup in productGroup.SubGroups)
             {
                 subGroup.ParentGroupId = null;
             }
-            await _context.SaveChangesAsync();
         }
 
+        // Bu gruba bağlı ürünlerin ProductGroupId'sini null yap
+        var products = await _context.Products
+            .Where(p => p.ProductGroupId == id)
+            .ToListAsync();
+
+        foreach (var product in products)
+        {
+            product.ProductGroupId = null;
+        }
+
+        // Grubu sil
         _context.ProductGroups.Remove(productGroup);
+
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Ürün grubu ve bağlantıları başarıyla güncellendi." });
     }
+
 
 
 }
