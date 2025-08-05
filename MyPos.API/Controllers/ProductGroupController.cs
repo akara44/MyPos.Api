@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos;
 using MyPos.Domain.Entities;
@@ -114,6 +115,7 @@ public class ProductGroupController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Ürün grubu ve bağlantıları başarıyla güncellendi." });
+        
     }
 
 
