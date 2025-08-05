@@ -92,4 +92,102 @@ public class ExpenseController : ControllerBase
 
         return Ok(new { message = "Expense deleted successfully." });
     }
+    [HttpGet("filtered-list")]
+    public async Task<IActionResult> GetFilteredExpenses(
+    [FromQuery] DateTime? startDate,
+    [FromQuery] DateTime? endDate,
+    [FromQuery] string? paymentType,
+    [FromQuery] int? typeId)
+    {
+        var query = _context.Expenses
+            .Include(e => e.Type) // Gider türü bilgisini çekmek için
+            .AsQueryable();
+
+        // Filtreleme mantığı aynı şekilde uygulanır
+        if (startDate.HasValue)
+        {
+            query = query.Where(e => e.Date.Date >= startDate.Value.Date);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(e => e.Date.Date <= endDate.Value.Date);
+        }
+
+        if (!string.IsNullOrEmpty(paymentType))
+        {
+            query = query.Where(e => e.PaymentType == paymentType);
+        }
+
+        if (typeId.HasValue)
+        {
+            query = query.Where(e => e.TypeId == typeId.Value);
+        }
+
+        // Filtrelenmiş gider listesini al
+        var filteredExpenses = await query.Select(x => new
+        {
+            x.Id,
+            x.Amount,
+            x.Description,
+            x.PaymentType,
+            x.Date,
+            Type = x.Type.Name
+        }).ToListAsync();
+
+        // Toplam hesaplamaları da burada yapıp tek bir nesne içinde döndürebilirsiniz
+        //var totalExpense = filteredExpenses.Sum(e => e.Amount);
+        //var cashTotal = filteredExpenses.Where(e => e.PaymentType == "NAKİT").Sum(e => e.Amount);
+        //var posCreditCardTotal = filteredExpenses.Where(e => e.PaymentType == "POS" || e.PaymentType == "KREDİ KARTI").Sum(e => e.Amount);
+
+        return Ok(new
+        {
+            //TotalExpense = totalExpense,
+            //CashTotal = cashTotal,
+            //PosCreditCardTotal = posCreditCardTotal,
+            Expenses = filteredExpenses // Filtrelenmiş listeyi de ekle
+        });
+    }
+    [HttpGet("total-expense")]
+    public async Task<IActionResult> GetTotalExpense()
+    {
+        var allExpenses = await _context.Expenses.ToListAsync();
+
+        var totalExpense = allExpenses.Sum(e => e.Amount);
+
+        var cashTotal = allExpenses
+            .Where(e => e.PaymentType == "NAKİT")
+            .Sum(e => e.Amount);
+
+        var posCreditCardTotal = allExpenses
+            .Where(e => e.PaymentType == "POS" || e.PaymentType == "KREDİ KARTI")
+            .Sum(e => e.Amount);
+
+        var totals = new
+        {
+            TotalExpense = totalExpense,
+            CashTotal = cashTotal,
+            PosCreditCardTotal = posCreditCardTotal
+        };
+
+        return Ok(totals);
+    }
+    [HttpGet("expense-by-type")]
+    public async Task<IActionResult> GetExpenseByType()
+    {
+        var expenseData = await _context.Expenses
+            .Include(e => e.Type)
+            .ToListAsync();
+
+        var groupedData = expenseData
+            .GroupBy(e => e.Type.Name)
+            .Select(g => new
+            {
+                Type = g.Key,
+                TotalAmount = g.Sum(e => e.Amount)
+            })
+            .ToList();
+
+        return Ok(groupedData);
+    }
 }
