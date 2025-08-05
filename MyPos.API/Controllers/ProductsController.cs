@@ -86,13 +86,34 @@ namespace MyPos.Api.Controllers
                 PurchasePrice = dto.PurchasePrice,
                 TaxRate = dto.TaxRate,
                 SalePageList = dto.SalePageList,
-                ProductGroupId = dto.ProductGroupId, // ProductGroupId'yi atayın
+                ProductGroupId = dto.ProductGroupId,
                 Unit = dto.Unit,
                 OriginCountry = dto.OriginCountry
             };
 
             _context.Products.Add(product);
+
+            // ✅ 1. ADIM: SADECE Product nesnesini kaydet ve ID'sini al.
+            // Bu çağrı, product nesnesinin Id'sini veritabanında oluşturur.
             await _context.SaveChangesAsync();
+
+            // ✅ 2. ADIM: Artık product.Id değeri var! Bu ID ile stok hareketini oluştur.
+            if (dto.Stock > 0)
+            {
+                var stockTransaction = new StockTransaction
+                {
+                    ProductId = product.Id, // Burada artık doğru ID değeri var
+                    QuantityChange = dto.Stock,
+                    TransactionType = "IN",
+                    Reason = "First Stock Entry", // Başlangıç stoku girişi
+                    Date = DateTime.Now
+                };
+                // Yazım hatası düzeltildi: _context.StockTransactions
+                _context.StockTransaction.Add(stockTransaction);
+
+                // Stok hareketini ayrı bir işlemde kaydet.
+                await _context.SaveChangesAsync();
+            }
 
             var response = new ProductResponseDto
             {
@@ -105,46 +126,13 @@ namespace MyPos.Api.Controllers
                 ProfitRate = product.ProfitRate,
                 TaxRate = product.TaxRate,
                 ProductGroupId = product.ProductGroupId,
-                ProductGroupName = productGroup.Name // Yanıt için ProductGroupName'i ayarlayın
+                ProductGroupName = productGroup.Name
             };
 
             return CreatedAtAction(
                 actionName: nameof(GetProductByBarcode),
                 routeValues: new { barcode = product.Barcode },
                 value: response);
-        }
-
-        // Resim Yükleme (burada değişiklik gerekmez, sadece mevcut ürün için resim yüklemeyi işler)
-        [HttpPost("{id}/upload-image")]
-        public async Task<IActionResult> UploadImage(int id, IFormFile file)
-        {
-            var product = await _context.Products.FindAsync(id);
-            if (product == null)
-                return NotFound("Ürün bulunamadı.");
-
-            if (file == null || file.Length == 0)
-                return BadRequest("Geçerli bir dosya seçilmedi.");
-
-            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (extension != ".jpg" && extension != ".jpeg" && extension != ".png")
-                return BadRequest("Sadece .jpg, .jpeg veya .png dosyaları yüklenebilir.");
-
-            var fileName = $"{Guid.NewGuid()}{extension}";
-            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
-            var fullPath = Path.Combine(folderPath, fileName);
-
-            if (!Directory.Exists(folderPath))
-                Directory.CreateDirectory(folderPath);
-
-            using (var stream = new FileStream(fullPath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            product.ImageUrl = $"/images/{fileName}";
-            await _context.SaveChangesAsync();
-
-            return Ok(new { imageUrl = product.ImageUrl });
         }
 
         // Ürün Güncelleme

@@ -7,30 +7,23 @@ namespace MyPos.Infrastructure.Persistence
     public class MyPosDbContext : DbContext
     {
         public MyPosDbContext(DbContextOptions<MyPosDbContext> options) : base(options) { }
-
         public DbSet<User> Users { get; set; }
         public DbSet<Product> Products { get; set; }
         public DbSet<ProductGroup> ProductGroups { get; set; }
         public DbSet<VariantType> VariantTypes { get; set; }
         public DbSet<VariantValue> VariantValues { get; set; }
-        // Yeni eklenenler
         public DbSet<ProductVariant> ProductVariants { get; set; }
         public DbSet<ProductVariantValue> ProductVariantValues { get; set; }
         public DbSet<Personnel> Personnel { get; set; }
         public DbSet<Company> Company { get; set; }
-
         public DbSet<PaymentType> PaymentTypes { get; set; }
-
         public DbSet<ExpenseIncomeType> ExpenseIncomeTypes { get; set; }
-
         public DbSet<Expense> Expenses { get; set; }
         public DbSet<Income> Incomes { get; set; }
-
-
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        public DbSet<StockTransaction> StockTransaction { get; set; }
+            protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder);
+            base.OnModelCreating(modelBuilder);         
             
             modelBuilder.Entity<ProductGroup>()
                 .HasOne(pg => pg.ParentGroup)
