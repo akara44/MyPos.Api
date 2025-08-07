@@ -1,34 +1,37 @@
-﻿using System;
+﻿// Models/Customer.cs
+using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Collections.Generic;
 
+/// <summary>
+/// Müşteri verilerini temsil eden entity sınıfı.
+/// </summary>
 public class Customer
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
 
     [Required(ErrorMessage = "Müşteri Tanımı alanı zorunludur.")]
-    [StringLength(100, ErrorMessage = "Müşteri Tanımı en fazla 100 karakter olabilir.")]
+    [StringLength(100, ErrorMessage = "Müşteri Tanımı en fazla 100 karakter olmalıdır.")]
     public string CustomerName { get; set; }
 
-    // Vade Süresi - Bu alanın veri tipi, uygulamanızın mantığına göre değişebilir (örneğin, int, string, TimeSpan).
     public string DueDate { get; set; }
 
-    // Telefon
+    
     public string Phone { get; set; }
 
-    // Adres
     public string Address { get; set; }
-
-    // Müşteri notu
     public string CustomerNote { get; set; }
-
-    // Müşteri açık hesap limiti
-    // Görüntüdeki "0" değeri varsayılan olarak alındığı için, bu alanı nullable decimal olarak tanımlamak esnekliği artırabilir.
     public decimal? OpenAccountLimit { get; set; }
-
-    // Vergi Dairesi
     public string TaxOffice { get; set; }
-
-    // Vergi No
     public string TaxNumber { get; set; }
+
+    // İlişki Tanımları
+    // Bir müşterinin birden fazla siparişi olabilir.
+    public ICollection<Order> Orders { get; set; } = new List<Order>();
+
+    // Bir müşterinin birden fazla ödemesi olabilir.
+    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 }

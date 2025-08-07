@@ -184,4 +184,37 @@ public class CustomerController : ControllerBase
 
         return NoContent();
     }
+    [HttpGet("{id}/summary")]
+    public async Task<ActionResult<CustomerSummaryDto>> GetCustomerSummary(int id)
+    {
+        // Müşterinin varlığını kontrol et, yoksa NotFound dönsün.
+        var customerExists = await _context.Customers.AnyAsync(c => c.Id == id);
+        if (!customerExists)
+        {
+            return NotFound("Belirtilen müşteri bulunamadı.");
+        }
+
+        // Müşterinin toplam satış tutarını hesapla
+        var totalSales = await _context.Orders
+            .Where(o => o.CustomerId == id)
+            .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
+
+        // Müşterinin toplam ödeme tutarını hesapla
+        var totalPayment = await _context.Payments
+            .Where(p => p.CustomerId == id)
+            .SumAsync(p => (decimal?)p.Amount) ?? 0;
+
+        // Kalan bakiyeyi hesapla
+        var remainingBalance = totalSales - totalPayment;
+
+        var summaryDto = new CustomerSummaryDto
+        {
+            TotalSales = totalSales,
+            TotalPayment = totalPayment,
+            RemainingBalance = remainingBalance
+        };
+
+        return Ok(summaryDto);
+    }
 }
+

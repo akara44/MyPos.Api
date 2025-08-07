@@ -22,10 +22,14 @@ namespace MyPos.Infrastructure.Persistence
         public DbSet<Income> Incomes { get; set; }
         public DbSet<StockTransaction> StockTransaction { get; set; }
         public DbSet<Customer> Customers { get; set; }
+        public DbSet<Order> Orders { get; set; }
+        public DbSet<Payment> Payments { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);         
             
+
             modelBuilder.Entity<ProductGroup>()
                 .HasOne(pg => pg.ParentGroup)
                 .WithMany(pg => pg.SubGroups)
@@ -62,6 +66,20 @@ namespace MyPos.Infrastructure.Persistence
                 .WithMany() // VariantValue'dan ProductVariantValue'ya tek yönlü bir ilişki olabilir
                 .HasForeignKey(pvv => pvv.VariantValueId)
                 .OnDelete(DeleteBehavior.Restrict); // Varyant değeri silinirken ilişkili ürün varyant değerleri kalmalı
+
+            // Müşteri ve Sipariş arasındaki ilişkiyi belirtiyoruz.
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.Customer)
+                .WithMany(c => c.Orders)
+                .HasForeignKey(o => o.CustomerId)
+                .IsRequired(false); // CustomerId'nin null olabileceğini belirtiyoruz.
+
+            // Müşteri ve Ödeme arasındaki ilişkiyi belirtiyoruz.
+            modelBuilder.Entity<Payment>()
+                .HasOne(p => p.Customer)
+                .WithMany(c => c.Payments)
+                .HasForeignKey(p => p.CustomerId)
+                .IsRequired(); // CustomerId'nin zorunlu olduğunu belirtiyoruz.
         }
     }
 }
