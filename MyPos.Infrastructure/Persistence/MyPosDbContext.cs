@@ -21,7 +21,8 @@ namespace MyPos.Infrastructure.Persistence
         public DbSet<Expense> Expenses { get; set; }
         public DbSet<Income> Incomes { get; set; }
         public DbSet<StockTransaction> StockTransaction { get; set; }
-            protected override void OnModelCreating(ModelBuilder modelBuilder)
+        public DbSet<Customer> Customers { get; set; }
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);         
             
