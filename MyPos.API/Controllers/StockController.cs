@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Domain.Entities;
+using MyPos.Infrastructure.Migrations;
 using MyPos.Infrastructure.Persistence;
 using System.Threading.Tasks;
 
@@ -53,6 +54,7 @@ public class StockController : ControllerBase
             Date = DateTime.Now
         };
 
+        
         _context.StockTransaction.Add(stockTransaction);
 
         // 5. Değişiklikleri veritabanına kaydet

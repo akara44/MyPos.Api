@@ -30,7 +30,7 @@ namespace MyPos.Application.Dtos
         public int Id { get; set; }
         public decimal ProfitRate { get; set; }
         public string ProductGroupName { get; set; } = string.Empty;
-        // Eksik olan ImageUrl özelliğini buraya ekleyin:
-        public string? ImageUrl { get; set; } // Bu satırı eklemeniz gerekiyor!
+        
+        public string? ImageUrl { get; set; }
     }
 }

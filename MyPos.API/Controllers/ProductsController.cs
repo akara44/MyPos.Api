@@ -1,5 +1,4 @@
-﻿// ProductControllers.cs
-using FluentValidation;
+﻿using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Infrastructure.Persistence;
@@ -93,11 +92,11 @@ namespace MyPos.Api.Controllers
 
             _context.Products.Add(product);
 
-            // ✅ 1. ADIM: SADECE Product nesnesini kaydet ve ID'sini al.
+           
             // Bu çağrı, product nesnesinin Id'sini veritabanında oluşturur.
             await _context.SaveChangesAsync();
 
-            // ✅ 2. ADIM: Artık product.Id değeri var! Bu ID ile stok hareketini oluştur.
+            
             if (dto.Stock > 0)
             {
                 var stockTransaction = new StockTransaction
@@ -108,7 +107,7 @@ namespace MyPos.Api.Controllers
                     Reason = "First Stock Entry", // Başlangıç stoku girişi
                     Date = DateTime.Now
                 };
-                // Yazım hatası düzeltildi: _context.StockTransactions
+          
                 _context.StockTransaction.Add(stockTransaction);
 
                 // Stok hareketini ayrı bir işlemde kaydet.
@@ -218,7 +217,7 @@ namespace MyPos.Api.Controllers
                 ProfitRate = product.ProfitRate,
                 TaxRate = product.TaxRate,
                 ProductGroupId = product.ProductGroupId,
-                ProductGroupName = product.ProductGroup.Name // Yanıt için ProductGroupName'i ayarlayın
+                ProductGroupName = product.ProductGroup.Name 
             });
         }
 
