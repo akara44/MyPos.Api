@@ -25,6 +25,9 @@ namespace MyPos.Infrastructure.Persistence
         public DbSet<Order> Orders { get; set; }
         public DbSet<Payment> Payments { get; set; }
 
+        public DbSet<PurchaseInvoice> PurchaseInvoices { get; set; }
+        public DbSet<PurchaseInvoiceItem> PurchaseInvoiceItems { get; set; }
+ 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);         
