@@ -45,4 +45,11 @@
         public decimal? DiscountRate1 { get; set; }
         public decimal? DiscountRate2 { get; set; }
     }
+    public class UpdatePurchaseInvoiceDto
+    {
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateTime InvoiceDate { get; set; }
+        public int? CompanyId { get; set; }
+        public List<PurchaseInvoiceItemDto> Items { get; set; } = new List<PurchaseInvoiceItemDto>();
+    }
 }

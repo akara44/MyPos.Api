@@ -5,8 +5,7 @@ using MyPos.Application.Dtos;
 using MyPos.Application.Validators;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
-using System.ComponentModel.DataAnnotations;
-using System.Transactions; // İşlem yönetimi için gerekli
+using System.Transactions; // TransactionScope için gerekli
 
 namespace MyPos.Api.Controllers
 {
@@ -15,30 +14,31 @@ namespace MyPos.Api.Controllers
     public class PurchaseInvoicesController : ControllerBase
     {
         private readonly MyPosDbContext _context;
-        private readonly IValidator<CreatePurchaseInvoiceDto> _validator;
+        private readonly IValidator<CreatePurchaseInvoiceDto> _createValidator;
+        private readonly IValidator<UpdatePurchaseInvoiceDto> _updateValidator;
 
-        public PurchaseInvoicesController(MyPosDbContext context, IValidator<CreatePurchaseInvoiceDto> validator)
+        public PurchaseInvoicesController(MyPosDbContext context,
+                                          IValidator<CreatePurchaseInvoiceDto> createValidator,
+                                          IValidator<UpdatePurchaseInvoiceDto> updateValidator)
         {
             _context = context;
-            _validator = validator;
+            _createValidator = createValidator;
+            _updateValidator = updateValidator;
         }
 
         [HttpPost]
         public async Task<IActionResult> CreatePurchaseInvoice([FromBody] CreatePurchaseInvoiceDto createDto)
         {
-            var validationResult = await _validator.ValidateAsync(createDto);
+            var validationResult = await _createValidator.ValidateAsync(createDto);
             if (!validationResult.IsValid)
             {
                 return BadRequest(validationResult.Errors);
             }
 
-            // Transaction kullanarak atomik bir işlem sağlamak
-            // Eğer bir hata oluşursa, veritabanına yapılan tüm değişiklikler geri alınır.
             using (var transaction = await _context.Database.BeginTransactionAsync())
             {
                 try
                 {
-                    // 1. DTO'dan PurchaseInvoice entity'sine dönüşüm
                     var newInvoice = new PurchaseInvoice
                     {
                         InvoiceNumber = createDto.InvoiceNumber,
@@ -53,12 +53,12 @@ namespace MyPos.Api.Controllers
                     _context.PurchaseInvoices.Add(newInvoice);
                     await _context.SaveChangesAsync();
 
-                    // 2. Fatura kalemlerini oluşturma ve hesaplamalar
                     foreach (var itemDto in createDto.Items)
                     {
                         var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == itemDto.ProductId);
                         if (product == null)
                         {
+                            await transaction.RollbackAsync();
                             return BadRequest($"Ürün bulunamadı: ProductId = {itemDto.ProductId}");
                         }
 
@@ -84,11 +84,8 @@ namespace MyPos.Api.Controllers
                         };
 
                         _context.PurchaseInvoiceItems.Add(newItem);
-
-                        // 3. Stok güncellemesi
                         product.Stock += itemDto.Quantity;
 
-                        // Fatura genel toplamlarını güncelle
                         newInvoice.TotalAmount += itemTotalPrice;
                         newInvoice.TotalDiscount += itemDiscount;
                         newInvoice.TotalTaxAmount += itemTaxAmount;
@@ -98,7 +95,6 @@ namespace MyPos.Api.Controllers
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
 
-                    // İstemciye geri dönüş DTO'su oluşturma
                     var resultDto = new PurchaseInvoiceDetailsDto
                     {
                         Id = newInvoice.Id,
@@ -125,7 +121,6 @@ namespace MyPos.Api.Controllers
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    // Loglama yapılabilir
                     return StatusCode(500, "Bir hata oluştu: " + ex.Message);
                 }
             }
@@ -167,6 +162,145 @@ namespace MyPos.Api.Controllers
             };
 
             return Ok(resultDto);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdatePurchaseInvoice(int id, [FromBody] UpdatePurchaseInvoiceDto updateDto)
+        {
+            var validationResult = await _updateValidator.ValidateAsync(updateDto);
+            if (!validationResult.IsValid)
+            {
+                return BadRequest(validationResult.Errors);
+            }
+
+            using (var transaction = await _context.Database.BeginTransactionAsync())
+            {
+                try
+                {
+                    var invoiceToUpdate = await _context.PurchaseInvoices
+                        .Include(i => i.PurchaseInvoiceItems)
+                        .FirstOrDefaultAsync(i => i.Id == id);
+
+                    if (invoiceToUpdate == null)
+                    {
+                        return NotFound($"ID'si {id} olan fatura bulunamadı.");
+                    }
+
+                    // Güncelleme öncesi eski stokları geri al
+                    foreach (var oldItem in invoiceToUpdate.PurchaseInvoiceItems)
+                    {
+                        var product = await _context.Products.FindAsync(oldItem.ProductId);
+                        if (product != null)
+                        {
+                            product.Stock -= oldItem.Quantity;
+                        }
+                    }
+
+                    // Eski kalemleri sil
+                    _context.PurchaseInvoiceItems.RemoveRange(invoiceToUpdate.PurchaseInvoiceItems);
+
+                    // Faturayı güncelle
+                    invoiceToUpdate.InvoiceNumber = updateDto.InvoiceNumber;
+                    invoiceToUpdate.InvoiceDate = updateDto.InvoiceDate;
+                    invoiceToUpdate.CompanyId = updateDto.CompanyId;
+                    invoiceToUpdate.TotalAmount = 0;
+                    invoiceToUpdate.TotalDiscount = 0;
+                    invoiceToUpdate.TotalTaxAmount = 0;
+                    invoiceToUpdate.GrandTotal = 0;
+
+                    // Yeni kalemleri oluştur ve stokları güncelle
+                    foreach (var itemDto in updateDto.Items)
+                    {
+                        var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == itemDto.ProductId);
+                        if (product == null)
+                        {
+                            return BadRequest($"Ürün bulunamadı: ProductId = {itemDto.ProductId}");
+                        }
+
+                        var itemTotalPrice = itemDto.Quantity * itemDto.UnitPrice;
+                        var itemDiscount = (itemTotalPrice * (itemDto.DiscountRate1 ?? 0) / 100) + (itemTotalPrice * (itemDto.DiscountRate2 ?? 0) / 100);
+                        var totalAfterDiscount = itemTotalPrice - itemDiscount;
+                        var itemTaxAmount = totalAfterDiscount * itemDto.TaxRate / 100;
+
+                        var newItem = new PurchaseInvoiceItem
+                        {
+                            PurchaseInvoiceId = invoiceToUpdate.Id,
+                            ProductId = product.Id,
+                            Barcode = product.Barcode,
+                            ProductName = product.Name,
+                            Quantity = itemDto.Quantity,
+                            UnitPrice = itemDto.UnitPrice,
+                            TotalPrice = itemTotalPrice,
+                            TaxRate = itemDto.TaxRate,
+                            TaxAmount = itemTaxAmount,
+                            DiscountRate1 = itemDto.DiscountRate1,
+                            DiscountRate2 = itemDto.DiscountRate2,
+                            TotalDiscountAmount = itemDiscount
+                        };
+
+                        invoiceToUpdate.PurchaseInvoiceItems.Add(newItem);
+                        product.Stock += itemDto.Quantity;
+
+                        invoiceToUpdate.TotalAmount += itemTotalPrice;
+                        invoiceToUpdate.TotalDiscount += itemDiscount;
+                        invoiceToUpdate.TotalTaxAmount += itemTaxAmount;
+                        invoiceToUpdate.GrandTotal += totalAfterDiscount + itemTaxAmount;
+                    }
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return NoContent();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    return StatusCode(500, "Fatura güncellenirken bir hata oluştu: " + ex.Message);
+                }
+            }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeletePurchaseInvoice(int id)
+        {
+            using (var transaction = await _context.Database.BeginTransactionAsync())
+            {
+                try
+                {
+                    var invoiceToDelete = await _context.PurchaseInvoices
+                        .Include(i => i.PurchaseInvoiceItems)
+                        .FirstOrDefaultAsync(i => i.Id == id);
+
+                    if (invoiceToDelete == null)
+                    {
+                        return NotFound($"ID'si {id} olan fatura bulunamadı.");
+                    }
+
+                    // Silme öncesinde stokları geri al
+                    foreach (var item in invoiceToDelete.PurchaseInvoiceItems)
+                    {
+                        var product = await _context.Products.FindAsync(item.ProductId);
+                        if (product != null)
+                        {
+                            product.Stock -= item.Quantity;
+                        }
+                    }
+
+                    // Fatura kalemlerini ve faturanın kendisini sil
+                    _context.PurchaseInvoiceItems.RemoveRange(invoiceToDelete.PurchaseInvoiceItems);
+                    _context.PurchaseInvoices.Remove(invoiceToDelete);
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return NoContent();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    return StatusCode(500, "Fatura silinirken bir hata oluştu: " + ex.Message);
+                }
+            }
         }
     }
 }
