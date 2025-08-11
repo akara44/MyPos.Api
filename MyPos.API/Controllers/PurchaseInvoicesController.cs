@@ -276,8 +276,8 @@ namespace MyPos.Api.Controllers
                         return NotFound($"ID'si {id} olan fatura bulunamadı.");
                     }
 
-                    // Silme öncesinde stokları geri al
-                    foreach (var item in invoiceToDelete.PurchaseInvoiceItems)
+                    // Stokları geri al
+                    foreach (var item in invoiceToDelete.PurchaseInvoiceItems.ToList())
                     {
                         var product = await _context.Products.FindAsync(item.ProductId);
                         if (product != null)
@@ -286,8 +286,10 @@ namespace MyPos.Api.Controllers
                         }
                     }
 
-                    // Fatura kalemlerini ve faturanın kendisini sil
-                    _context.PurchaseInvoiceItems.RemoveRange(invoiceToDelete.PurchaseInvoiceItems);
+                    // Fatura kalemlerini doğrudan ana varlığın koleksiyonundan sil
+                    invoiceToDelete.PurchaseInvoiceItems.Clear();
+
+                    // Faturanın kendisini sil
                     _context.PurchaseInvoices.Remove(invoiceToDelete);
 
                     await _context.SaveChangesAsync();
