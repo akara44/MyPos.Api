@@ -62,11 +62,23 @@ namespace MyPos.Api.Controllers
                             return BadRequest($"Ürün bulunamadı: ProductId = {itemDto.ProductId}");
                         }
 
+                        // 1️⃣ Toplam fiyat (KDV ve indirim hariç)
                         var itemTotalPrice = itemDto.Quantity * itemDto.UnitPrice;
-                        var itemDiscount = (itemTotalPrice * (itemDto.DiscountRate1 ?? 0) / 100) + (itemTotalPrice * (itemDto.DiscountRate2 ?? 0) / 100);
-                        var totalAfterDiscount = itemTotalPrice - itemDiscount;
+
+                        // 2️⃣ İndirimleri sırayla uygula
+                        var discountAmount1 = itemTotalPrice * (itemDto.DiscountRate1 ?? 0) / 100;
+                        var priceAfterFirstDiscount = itemTotalPrice - discountAmount1;
+
+                        var discountAmount2 = priceAfterFirstDiscount * (itemDto.DiscountRate2 ?? 0) / 100;
+                        var totalAfterDiscount = priceAfterFirstDiscount - discountAmount2;
+
+                        // 3️⃣ Toplam indirim tutarı
+                        var itemDiscount = discountAmount1 + discountAmount2;
+
+                        // 4️⃣ KDV'yi indirimli fiyattan hesapla
                         var itemTaxAmount = totalAfterDiscount * itemDto.TaxRate / 100;
 
+                        // 5️⃣ Yeni satır ekle
                         var newItem = new PurchaseInvoiceItem
                         {
                             PurchaseInvoiceId = newInvoice.Id,
@@ -84,8 +96,11 @@ namespace MyPos.Api.Controllers
                         };
 
                         _context.PurchaseInvoiceItems.Add(newItem);
+
+                        // Stok artır
                         product.Stock += itemDto.Quantity;
 
+                        // Fatura toplamlarını güncelle
                         newInvoice.TotalAmount += itemTotalPrice;
                         newInvoice.TotalDiscount += itemDiscount;
                         newInvoice.TotalTaxAmount += itemTaxAmount;
@@ -277,7 +292,7 @@ namespace MyPos.Api.Controllers
                     }
 
                     // Stokları geri al
-                    foreach (var item in invoiceToDelete.PurchaseInvoiceItems.ToList())
+                    foreach (var item in invoiceToDelete.PurchaseInvoiceItems)
                     {
                         var product = await _context.Products.FindAsync(item.ProductId);
                         if (product != null)
@@ -286,11 +301,13 @@ namespace MyPos.Api.Controllers
                         }
                     }
 
-                    // Fatura kalemlerini doğrudan ana varlığın koleksiyonundan sil
-                    invoiceToDelete.PurchaseInvoiceItems.Clear();
+                    // Fatura kalemlerini veritabanından silmek için RemoveRange kullanmak yerine
+                    // ana varlıktan (fatura) alt varlıkları (kalemleri) silme talimatı verelim.
+                    // Bu, bazı durumlarda EF'nin durumu daha iyi anlamasını sağlar.
+                    _context.PurchaseInvoiceItems.RemoveRange(invoiceToDelete.PurchaseInvoiceItems);
 
                     // Faturanın kendisini sil
-                    _context.PurchaseInvoices.Remove(invoiceToDelete);
+                    _context.Remove(invoiceToDelete);
 
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
@@ -300,6 +317,8 @@ namespace MyPos.Api.Controllers
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
+                    // Lütfen bu logu kontrol et, asıl hata mesajı burada gizli olabilir!
+                    Console.WriteLine(ex.InnerException?.Message);
                     return StatusCode(500, "Fatura silinirken bir hata oluştu: " + ex.Message);
                 }
             }

@@ -52,4 +52,36 @@
         public int? CompanyId { get; set; }
         public List<PurchaseInvoiceItemDto> Items { get; set; } = new List<PurchaseInvoiceItemDto>();
     }
+    public class PurchaseInvoiceListDto
+    {
+        public int Id { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateTime InvoiceDate { get; set; }
+        public string CompanyName { get; set; } = string.Empty;
+        public decimal GrandTotal { get; set; }
+    }
+
+    // Fatura listeleme ve filtreleme için kullanılan DTO
+    public class PurchaseInvoiceFilterDto
+    {
+        public string? InvoiceNumber { get; set; }
+        public int? CompanyId { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+
+        public int PageNumber { get; set; } = 1;
+        public int PageSize { get; set; } = 10;
+
+        public string? SortBy { get; set; }
+        public string? SortDirection { get; set; }
+    }
+
+    // Listeleme işlemi için sonuç DTO'su (toplam sayıyı da dönebilmek için)
+    public class PagedResultDto<T>
+    {
+        public List<T> Items { get; set; } = new List<T>();
+        public int TotalCount { get; set; }
+        public int PageNumber { get; set; }
+        public int PageSize { get; set; }
+    }
 }
