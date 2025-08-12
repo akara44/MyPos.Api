@@ -100,6 +100,18 @@ namespace MyPos.Api.Controllers
                         // Stok artır
                         product.Stock += itemDto.Quantity;
 
+                        // Stok hareketini kaydet
+                        var stockTransaction = new StockTransaction
+                        {
+                            ProductId = product.Id,
+                            QuantityChange = itemDto.Quantity,
+                            TransactionType = "IN", // Alış olduğu için giriş
+                            Reason = "PurchaseInvoice",
+                            Date = DateTime.Now
+                        };
+                        _context.StockTransaction.Add(stockTransaction);
+
+
                         // Fatura toplamlarını güncelle
                         newInvoice.TotalAmount += itemTotalPrice;
                         newInvoice.TotalDiscount += itemDiscount;
