@@ -110,4 +110,57 @@ public class AuthController : ControllerBase
         var token = tokenHandler.CreateToken(tokenDescriptor);
         return tokenHandler.WriteToken(token);
     }
+    [HttpPost("personnel-login")]
+    public async Task<IActionResult> PersonnelLogin([FromBody] PersonnelLoginDto dto)
+    {
+        var personnel = await _context.Personnel.FirstOrDefaultAsync(p => p.Code == dto.Code);
+        if (personnel == null || string.IsNullOrEmpty(dto.Password) || string.IsNullOrEmpty(personnel.PasswordHash))
+            return Unauthorized("Geçersiz kullanıcı kodu ya da şifre.");
+
+        // BCrypt ile parola doğrulama
+        if (!VerifyPersonnelPassword(dto.Password, personnel.PasswordHash))
+            return Unauthorized("Geçersiz kullanıcı kodu ya da şifre.");
+
+        string token = CreatePersonnelToken(personnel);
+        return Ok(new { Token = token });
+    }
+
+    private bool VerifyPersonnelPassword(string password, string storedHash)
+    {
+        // BCrypt.Net-Next paketini kullanıyoruz
+        return BCrypt.Net.BCrypt.Verify(password, storedHash);
+    }
+
+    private string CreatePersonnelToken(Personnel personnel)
+    {
+        var jwtKey = _config["Jwt:Key"] ?? throw new ApplicationException("JWT Key configuration is missing");
+
+        var claims = new[]
+        {
+        new Claim(ClaimTypes.NameIdentifier, personnel.Id.ToString()),
+        new Claim(ClaimTypes.Name, personnel.Name ?? string.Empty),
+        new Claim("Role", personnel.Role ?? string.Empty),
+        new Claim("Phone", personnel.Phone ?? string.Empty),
+
+        // İstersen buraya izinleri de ekleyebilirsin
+        new Claim("ViewCustomer", personnel.ViewCustomer.ToString()),
+        new Claim("AddOrUpdateProduct", personnel.AddOrUpdateProduct.ToString()),
+        new Claim("DeleteProduct", personnel.DeleteProduct.ToString())
+    };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
+
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(claims),
+            Expires = DateTime.UtcNow.AddDays(1),
+            SigningCredentials = creds
+        };
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+        return tokenHandler.WriteToken(token);
+    }
+
 }
