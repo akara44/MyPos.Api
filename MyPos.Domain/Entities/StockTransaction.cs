@@ -25,5 +25,6 @@ namespace MyPos.Domain.Entities
         public string Reason { get; set; } = string.Empty; // "Sale", "Purchase", "Return", "Damage"
 
         public DateTime Date { get; set; }
+        public int BalanceAfter { get; set; }
     }
 }
