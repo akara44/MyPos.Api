@@ -1,5 +1,4 @@
-﻿// Product.cs (Güncellenmiş Kısım)
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MyPos.Domain.Entities
@@ -32,16 +31,16 @@ namespace MyPos.Domain.Entities
         public int TaxRate { get; set; }
 
         [StringLength(50)]
-        public string SalePageList { get; set; } = "Liste1";
+        public string SalePageList { get; set; }
 
         public int? ProductGroupId { get; set; }
         public ProductGroup? ProductGroup { get; set; }
 
         [StringLength(20)]
-        public string Unit { get; set; } = "Adet";
+        public string Unit { get; set; }
 
         [StringLength(50)]
-        public string OriginCountry { get; set; } = "Türkiye";
+        public string OriginCountry { get; set; } 
 
         public string? ImageUrl { get; set; }
 

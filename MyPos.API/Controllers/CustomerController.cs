@@ -5,10 +5,7 @@ using MyPos.Infrastructure.Persistence;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-// Model, DTO ve Validator sınıflarınızın bulunduğu namespace'leri ekleyin.
-// using YourProjectName.Models;
-// using YourProjectName.DTOs;
-// using YourProjectName.Validators;
+
 
 [ApiController]
 [Route("api/[controller]")]
@@ -17,19 +14,17 @@ public class CustomerController : ControllerBase
     // Veritabanı bağlamını (DbContext) kullanmak için bir alan tanımlıyoruz.
     private readonly MyPosDbContext _context;
 
-    // Dependency Injection ile DbContext'i contructor'a alıyoruz.
+    
     public CustomerController(MyPosDbContext context)
     {
         _context = context;
     }
 
-    /// <summary>
-    /// Tüm müşterilerin listesini döndürür.
-    /// </summary>
+    
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CustomerDto>>> GetCustomers()
     {
-        // _context.Customers'tan verileri çekiyoruz.
+        
         var customers = await _context.Customers.ToListAsync();
 
         var customerDtos = customers.Select(c => new CustomerDto
@@ -48,10 +43,7 @@ public class CustomerController : ControllerBase
         return Ok(customerDtos);
     }
 
-    /// <summary>
-    /// Belirli bir ID'ye sahip müşteriyi döndürür.
-    /// </summary>
-    /// <param name="id">Müşteri ID'si</param>
+    
     [HttpGet("{id}")]
     public async Task<ActionResult<CustomerDto>> GetCustomer(int id)
     {
@@ -77,10 +69,7 @@ public class CustomerController : ControllerBase
         return Ok(customerDto);
     }
 
-    /// <summary>
-    /// Yeni bir müşteri ekler.
-    /// </summary>
-    /// <param name="customerDto">Eklenecek müşteri verisi</param>
+    
     [HttpPost]
     public async Task<ActionResult<CustomerDto>> CreateCustomer(CustomerDto customerDto)
     {
@@ -106,16 +95,12 @@ public class CustomerController : ControllerBase
         _context.Customers.Add(customer);
         await _context.SaveChangesAsync(); // Değişiklikleri veritabanına kaydet.
 
-        customerDto.Id = customer.Id; // Otomatik oluşturulan ID'yi DTO'ya geri atama.
+        customerDto.Id = customer.Id; 
 
         return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, customerDto);
     }
 
-    /// <summary>
-    /// Mevcut bir müşteriyi günceller.
-    /// </summary>
-    /// <param name="id">Güncellenecek müşteri ID'si</param>
-    /// <param name="customerDto">Yeni müşteri verileri</param>
+    
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateCustomer(int id, CustomerDto customerDto)
     {
@@ -130,7 +115,7 @@ public class CustomerController : ControllerBase
             return NotFound();
         }
 
-        // DTO'dan gelen verilerle var olan müşteri modelini güncelliyoruz.
+        
         existingCustomer.CustomerName = customerDto.CustomerName;
         existingCustomer.DueDate = customerDto.DueDate;
         existingCustomer.Phone = customerDto.Phone;
@@ -166,10 +151,7 @@ public class CustomerController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>
-    /// Belirli bir müşteriyi siler.
-    /// </summary>
-    /// <param name="id">Silinecek müşteri ID'si</param>
+    
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCustomer(int id)
     {

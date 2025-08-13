@@ -1,5 +1,4 @@
-﻿// MyPosDbContext.cs (Güncellenmiş Kısım)
-using MyPos.Domain.Entities;
+﻿using MyPos.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace MyPos.Infrastructure.Persistence

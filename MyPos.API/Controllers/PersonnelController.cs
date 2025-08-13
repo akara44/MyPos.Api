@@ -1,5 +1,4 @@
-﻿
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using MyPos.Infrastructure.Migrations;
 using MyPos.Infrastructure.Persistence;
 using SixLabors.ImageSharp;
@@ -92,7 +91,7 @@ public class PersonnelController : ControllerBase
         return Ok(personals);
     }
     [HttpDelete("delete/{id}")]
-    public IActionResult Delete(Guid id) // Change parameter type from int to Guid
+    public IActionResult Delete(Guid id) 
     {
         var personal = _context.Personnel.FirstOrDefault(p => p.Id == id);
         if (personal == null) return NotFound("Kullanıcı bulunamadı.");
@@ -126,7 +125,7 @@ public class PersonnelController : ControllerBase
     }
 
     [HttpPut("update-password/{id}")]
-    public IActionResult UpdatePassword(Guid id, [FromBody] string newPassword) // Change int to Guid
+    public IActionResult UpdatePassword(Guid id, [FromBody] string newPassword) 
     {
         var personal = _context.Personnel.FirstOrDefault(p => p.Id == id);
         if (personal == null) return NotFound("Kullanıcı bulunamadı.");

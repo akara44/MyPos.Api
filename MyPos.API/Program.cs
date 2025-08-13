@@ -13,7 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // 1. DbContext Konfigürasyonu
 builder.Services.AddDbContext<MyPosDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2. FluentValidation
 builder.Services.AddControllers();
@@ -21,7 +21,7 @@ builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 
 // Mevcut validator'ları kaydet
-builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>(); // ProductValidator ve ProductGroupValidator buraya eklendi
+builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<ProductGroupValidator>();
 
 // VariantType ve VariantValue için mevcut validator'lar
@@ -30,11 +30,11 @@ builder.Services.AddScoped<IValidator<UpdateVariantTypeDto>, UpdateVariantTypeDt
 builder.Services.AddScoped<IValidator<CreateVariantValueDto>, CreateVariantValueDtoValidator>();
 builder.Services.AddScoped<IValidator<UpdateVariantValueDto>, UpdateVariantValueDtoValidator>();
 
-// YENİ EKLENEN: ProductVariant DTO'ları için validator'lar
+// ProductVariant DTO'ları için validator'lar
 builder.Services.AddScoped<IValidator<CreateProductVariantDto>, CreateProductVariantDtoValidator>();
 builder.Services.AddScoped<IValidator<UpdateProductVariantDto>, UpdateProductVariantDtoValidator>();
 
-// YENİ EKLENEN: UpdateProductWithImageDto için validator (ProductsController'da kullanıldığı için)
+// UpdateProductWithImageDto için validator 
 builder.Services.AddScoped<IValidator<UpdateProductWithImageDto>, UpdateProductWithImageDtoValidator>();
 
 builder.Services.AddScoped<AbstractValidator<CompanyDto>, CompanyValidator>();

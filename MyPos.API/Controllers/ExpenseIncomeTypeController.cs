@@ -14,7 +14,7 @@ public class ExpenseIncomeTypeController : ControllerBase
         _context = context;
     }
 
-    // GET: api/ExpenseIncomeType
+    // api/ExpenseIncomeType
     [HttpGet]
     public async Task<ActionResult<IEnumerable<object>>> GetAll()
     {
@@ -25,7 +25,7 @@ public class ExpenseIncomeTypeController : ControllerBase
         return Ok(types);
     }
 
-    // POST: api/ExpenseIncomeType
+    //  api/ExpenseIncomeType
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ExpenseIncomeTypeDto dto)
     {
@@ -43,7 +43,7 @@ public class ExpenseIncomeTypeController : ControllerBase
         return Ok(new { message = "Type added successfully." });
     }
 
-    // PUT: api/ExpenseIncomeType/5
+    //  api/ExpenseIncomeType/5
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] ExpenseIncomeTypeDto dto)
     {
@@ -63,7 +63,7 @@ public class ExpenseIncomeTypeController : ControllerBase
         return Ok(new { message = "Type updated successfully." });
     }
 
-    // DELETE: api/ExpenseIncomeType/5
+    //  api/ExpenseIncomeType/5
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {

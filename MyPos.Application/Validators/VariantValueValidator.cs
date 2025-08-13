@@ -1,5 +1,4 @@
-﻿// VariantValueValidator.cs
-using FluentValidation;
+﻿using FluentValidation;
 using MyPos.Application.Dtos;
 
 namespace MyPos.Application.Validators

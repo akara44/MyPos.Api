@@ -1,5 +1,4 @@
-﻿// VariantTypesController.cs
-using FluentValidation;
+﻿using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Infrastructure.Persistence;
@@ -117,8 +116,6 @@ namespace MyPos.Api.Controllers
                 return NotFound();
             }
 
-            // Bağlı varyant değerleri varsa silmeyi engelleyin veya onları da silin
-            // Şimdilik kısıtlama koyduk, bağlı değerler varsa silinemeyecek (OnDelete(DeleteBehavior.Restrict) sayesinde)
             _context.VariantTypes.Remove(variantType);
             await _context.SaveChangesAsync();
 

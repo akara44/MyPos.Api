@@ -2,9 +2,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-/// <summary>
-/// Müşteri alışverişlerini temsil eden entity sınıfı.
-/// </summary>
+
 public class Order
 {
     [Key]
@@ -15,7 +13,7 @@ public class Order
     [StringLength(50)]
     public string OrderCode { get; set; }
 
-    // Foreign Key: Müşteri seçimi zorunlu olmadığı için nullable yaptık.
+    
     public int? CustomerId { get; set; }
 
     [Required]
@@ -36,7 +34,7 @@ public class Order
     [StringLength(500)]
     public string OrderNote { get; set; }
 
-    // Foreign Key: Satışı yapan personel için.
+    
     public int? PersonnelId { get; set; }
 
     // İlişki Tanımları

@@ -1,9 +1,8 @@
-﻿// Controllers/OrderController.cs
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.Dtos; // Mevcut DTO'larınızın namespace'i
-using MyPos.Infrastructure.Persistence; // DbContext'inizin namespace'i
-using MyPos.Domain.Entities; // Modellerinizin namespace'i
+using MyPos.Application.Dtos;
+using MyPos.Infrastructure.Persistence; 
+using MyPos.Domain.Entities; 
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,13 +19,7 @@ public class OrderController : ControllerBase
         _context = context;
     }
 
-    /// <summary>
-    /// Belirli bir müşterinin sipariş listesini, tarih aralığına göre filtreleyerek döndürür.
-    /// </summary>
-    /// <param name="customerId">Müşteri ID'si</param>
-    /// <param name="startDate">Filtreleme başlangıç tarihi (isteğe bağlı)</param>
-    /// <param name="endDate">Filtreleme bitiş tarihi (isteğe bağlı)</param>
-    [HttpGet("customer/{customerId}")]
+       [HttpGet("customer/{customerId}")]
     public async Task<ActionResult<IEnumerable<OrderListDto>>> GetCustomerOrders(
         int customerId,
         [FromQuery] DateTime? startDate,

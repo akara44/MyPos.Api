@@ -1,5 +1,4 @@
-﻿// UpdateProductWithImageDtoValidator.cs (Bu dosyayı MyPos.Application.Validators klasöründe oluşturmanız gerekiyor)
-using FluentValidation;
+﻿using FluentValidation;
 using Microsoft.AspNetCore.Http;
 using MyPos.Application.Dtos;
 

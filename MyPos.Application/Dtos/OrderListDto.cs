@@ -1,9 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>
-/// Müşteri alışveriş listesi tablosu için kullanılacak DTO.
-/// </summary>
+
 public class OrderListDto
 {
     public int Id { get; set; }

@@ -127,7 +127,7 @@ public class AuthController : ControllerBase
 
     private bool VerifyPersonnelPassword(string password, string storedHash)
     {
-        // BCrypt.Net-Next paketini kullanıyoruz
+        
         return BCrypt.Net.BCrypt.Verify(password, storedHash);
     }
 
@@ -142,7 +142,7 @@ public class AuthController : ControllerBase
         new Claim("Role", personnel.Role ?? string.Empty),
         new Claim("Phone", personnel.Phone ?? string.Empty),
 
-        // İstersen buraya izinleri de ekleyebilirsin
+        
         new Claim("ViewCustomer", personnel.ViewCustomer.ToString()),
         new Claim("AddOrUpdateProduct", personnel.AddOrUpdateProduct.ToString()),
         new Claim("DeleteProduct", personnel.DeleteProduct.ToString())

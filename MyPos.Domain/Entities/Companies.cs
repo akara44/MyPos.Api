@@ -1,6 +1,5 @@
-﻿// MyPos.Domain.Entities/Company.cs (Örnek)
-using System;
-using System.ComponentModel.DataAnnotations; // Eğer kullanıyorsanız
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace MyPos.Domain.Entities
 {
@@ -10,7 +9,7 @@ namespace MyPos.Domain.Entities
 
         [Required]
         [StringLength(255)]
-        public string Name { get; set; } = string.Empty; // Nullable olmayan stringler için boş değer ataması
+        public string Name { get; set; } = string.Empty; 
 
         [StringLength(255)]
         public string OfficialName { get; set; } = string.Empty;
@@ -32,6 +31,6 @@ namespace MyPos.Domain.Entities
         [StringLength(50)]
         public string TaxNumber { get; set; } = string.Empty;
 
-        public DateTime CreatedDate { get; set; } // Bu satırı ekleyin!
+        public DateTime CreatedDate { get; set; } 
     }
 }

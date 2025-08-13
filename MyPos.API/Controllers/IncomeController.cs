@@ -57,7 +57,7 @@ public class IncomeController : ControllerBase
         return Ok(incomes);
     }
 
-    // ✅ Güncelleme
+    //  Güncelleme
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateIncome(int id, [FromBody] TransactionDto dto)
     {
@@ -79,7 +79,7 @@ public class IncomeController : ControllerBase
         return Ok(new { message = "Income updated successfully." });
     }
 
-    // ✅ Silme
+    // Silme
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteIncome(int id)
     {
@@ -133,11 +133,6 @@ public class IncomeController : ControllerBase
             x.Date,
             Type = x.Type.Name
         }).ToListAsync();
-
-        // Toplam hesaplamaları da burada yapıp tek bir nesne içinde döndürebilirsiniz
-        //var totalIncome = filteredIncomes.Sum(i => i.Amount);
-        //var cashTotal = filteredIncomes.Where(i => i.PaymentType == "NAKİT").Sum(i => i.Amount);
-        //var posTotal = filteredIncomes.Where(i => i.PaymentType == "POS").Sum(i => i.Amount);
 
         return Ok(new
         {

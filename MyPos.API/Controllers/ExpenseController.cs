@@ -57,7 +57,7 @@ public class ExpenseController : ControllerBase
         return Ok(expenses);
     }
 
-    // ✅ Güncelleme
+    // Güncelleme
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateExpense(int id, [FromBody] TransactionDto dto)
     {
@@ -80,7 +80,7 @@ public class ExpenseController : ControllerBase
         return Ok(new { message = "Expense updated successfully." });
     }
 
-    // ✅ Silme
+    //  Silme
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteExpense(int id)
     {
@@ -135,16 +135,11 @@ public class ExpenseController : ControllerBase
             Type = x.Type.Name
         }).ToListAsync();
 
-        // Toplam hesaplamaları da burada yapıp tek bir nesne içinde döndürebilirsiniz
-        //var totalExpense = filteredExpenses.Sum(e => e.Amount);
-        //var cashTotal = filteredExpenses.Where(e => e.PaymentType == "NAKİT").Sum(e => e.Amount);
-        //var posCreditCardTotal = filteredExpenses.Where(e => e.PaymentType == "POS" || e.PaymentType == "KREDİ KARTI").Sum(e => e.Amount);
+       
 
         return Ok(new
         {
-            //TotalExpense = totalExpense,
-            //CashTotal = cashTotal,
-            //PosCreditCardTotal = posCreditCardTotal,
+            
             Expenses = filteredExpenses // Filtrelenmiş listeyi de ekle
         });
     }

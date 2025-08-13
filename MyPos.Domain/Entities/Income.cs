@@ -4,7 +4,7 @@
     public decimal Amount { get; set; }
     public string? Description { get; set; }
 
-    // Enum yerine string
+  
     public string PaymentType { get; set; }
 
     public DateTime Date { get; set; }

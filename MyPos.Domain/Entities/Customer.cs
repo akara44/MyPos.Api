@@ -1,12 +1,9 @@
-﻿// Models/Customer.cs
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Collections.Generic;
 
-/// <summary>
-/// Müşteri verilerini temsil eden entity sınıfı.
-/// </summary>
+
 public class Customer
 {
     [Key]

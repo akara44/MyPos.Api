@@ -1,5 +1,4 @@
-﻿// VariantValueDto.cs
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace MyPos.Application.Dtos
 {

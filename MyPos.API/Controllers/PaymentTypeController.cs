@@ -54,7 +54,7 @@ namespace MyPos.API.Controllers
             return Ok(paymentTypeDto);
         }
 
-        // POST: api/PaymentTypes
+        // api/PaymentTypes
         [HttpPost]
         public async Task<ActionResult<PaymentTypeDto>> CreatePaymentType(PaymentTypeDto paymentTypeDto)
         {
@@ -78,7 +78,7 @@ namespace MyPos.API.Controllers
             return CreatedAtAction(nameof(GetPaymentType), new { id = paymentTypeDto.Id }, paymentTypeDto);
         }
 
-        // PUT: api/PaymentTypes/5
+        // api/PaymentTypes/5
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdatePaymentType(int id, PaymentTypeDto paymentTypeDto)
         {
@@ -121,7 +121,7 @@ namespace MyPos.API.Controllers
             return NoContent();
         }
 
-        // DELETE: api/PaymentTypes/5
+        //  api/PaymentTypes/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePaymentType(int id)
         {

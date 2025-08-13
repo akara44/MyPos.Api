@@ -1,9 +1,6 @@
 ﻿using FluentValidation;
 using System.Text.RegularExpressions;
 
-/// <summary>
-/// Müşteri modelini doğrulamak için kullanılan FluentValidation doğrulayıcısı.
-/// </summary>
 public class CustomerValidator : AbstractValidator<Customer>
 {
     public CustomerValidator()

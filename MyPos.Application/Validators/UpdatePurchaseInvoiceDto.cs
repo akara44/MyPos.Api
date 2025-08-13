@@ -3,8 +3,6 @@ using MyPos.Application.Dtos;
 
 namespace MyPos.Application.Validators
 {
-    // ... (Mevcut validator'lar) ...
-
     public class UpdatePurchaseInvoiceDtoValidator : AbstractValidator<UpdatePurchaseInvoiceDto>
     {
         public UpdatePurchaseInvoiceDtoValidator()

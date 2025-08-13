@@ -1,5 +1,4 @@
-﻿// VariantType.cs
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace MyPos.Domain.Entities
 {

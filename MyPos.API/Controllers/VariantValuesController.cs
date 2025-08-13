@@ -1,5 +1,4 @@
-﻿// VariantValuesController.cs
-using FluentValidation;
+﻿using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Infrastructure.Persistence;
