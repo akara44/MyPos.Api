@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
@@ -101,44 +102,63 @@ public class SaleController : ControllerBase
     [HttpPost("{saleId}/finalize")]
     public async Task<IActionResult> FinalizeSale(int saleId, [FromBody] FinalizeSaleRequestDto request)
     {
-        // Satışı bul
-        var sale = await _context.Sales
-            .Include(s => s.SaleItems)
-            .FirstOrDefaultAsync(s => s.SaleId == saleId);
-
-        if (sale == null)
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            return NotFound($"Satış ID'si {saleId} bulunamadı.");
-        }
+            // Satışı bul
+            var sale = await _context.Sales
+                .Include(s => s.SaleItems)
+                .FirstOrDefaultAsync(s => s.SaleId == saleId);
 
-        // Satış zaten tamamlanmış mı diye kontrol et
-        if (sale.IsCompleted)
-        {
-            return BadRequest("Bu satış zaten tamamlanmış.");
-        }
-
-        // 1. Ödeme işlemini yap (bu kısım gerçek bir API çağrısı olabilir)
-        // Burada basitçe PaymentType ve TotalAmount güncellendi.
-        sale.PaymentType = request.PaymentType;
-
-        // 2. Stokları güncelle
-        foreach (var saleItem in sale.SaleItems)
-        {
-            var product = await _context.Products.FindAsync(saleItem.ProductId);
-            if (product != null)
+            if (sale == null)
             {
-                product.Stock -= saleItem.Quantity;
-                _context.Entry(product).State = EntityState.Modified;
+                return NotFound($"Satış ID'si {saleId} bulunamadı.");
             }
+
+            // Satış zaten tamamlanmış mı diye kontrol et
+            if (sale.IsCompleted)
+            {
+                return BadRequest("Bu satış zaten tamamlanmış.");
+            }
+
+            // 1. Ödeme işlemini yap (bu kısım gerçek bir API çağrısı olabilir)
+            sale.PaymentType = request.PaymentType;
+
+            // 2. Stokları güncelle ve hareketleri kaydet
+            foreach (var saleItem in sale.SaleItems)
+            {
+                var product = await _context.Products.FindAsync(saleItem.ProductId);
+                if (product != null)
+                {
+                    // Stoktan düşüş
+                    product.Stock -= saleItem.Quantity;
+
+                    // Stok hareketini kaydet
+                    _context.StockTransaction.Add(new StockTransaction
+                    {
+                        ProductId = product.Id,
+                        QuantityChange = -saleItem.Quantity, // Satış olduğu için negatif değer
+                        TransactionType = "OUT",
+                        Reason = $"Sale:{saleId}",
+                        Date = DateTime.Now,
+                        BalanceAfter = product.Stock
+                    });
+                }
+            }
+
+            // 3. Satışı tamamlanmış olarak işaretle
+            sale.IsCompleted = true;
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Ok(new { message = "Satış başarıyla tamamlandı.", saleId = sale.SaleId });
         }
-
-        // 3. Satışı tamamlanmış olarak işaretle
-        sale.IsCompleted = true;
-        _context.Entry(sale).State = EntityState.Modified;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Satış başarıyla tamamlandı.", saleId = sale.SaleId });
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            return StatusCode(500, "Satış tamamlanırken hata oluştu: " + ex.Message);
+        }
     }
 
     [HttpGet("{saleId}")]
