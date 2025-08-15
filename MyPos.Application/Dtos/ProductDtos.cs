@@ -18,7 +18,7 @@ namespace MyPos.Application.Dtos
         public string SalePageList { get; set; } = "Liste1";
         public int? ProductGroupId { get; set; }    
         public string Unit { get; set; } = "Adet";
-        public string OriginCountry { get; set; } = "Türkiye";
+        public string OriginCountry { get; set; } = "Türkiye";                                                                                    
         // ImageUrl'ü CreateProductDto'ya da eklemek isterseniz buraya ekleyebilirsiniz,
         // ancak genellikle resim yükleme ayrı bir adım olduğu için sadece Response DTO'da bulunur.
         // public string? ImageUrl { get; set; } // Eğer ürün oluşturulurken URL sağlanacaksa
