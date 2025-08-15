@@ -76,14 +76,24 @@ public class SaleController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // CUSTOMER ADINI ÇEKMEK İÇİN KOD EKLENDİ
+        string? customerName = null;
+        if (sale.CustomerId.HasValue)
+        {
+            var customer = await _context.Customers.FindAsync(sale.CustomerId.Value);
+            customerName = customer?.CustomerName;
+        }
+
         // Front-end'e oluşturulan satışın ID'sini ve detaylarını dön.
         var saleDetailsDto = new SaleDetailsDto
         {
             SaleId = sale.SaleId,
             CustomerId = sale.CustomerId,
+            CustomerName = customerName, // DTO'ya customerName atandı
             TotalAmount = sale.TotalAmount,
             SaleDate = sale.SaleDate,
             IsCompleted = sale.IsCompleted,
+            PaymentType = sale.PaymentType,
             SaleItems = sale.SaleItems.Select(si => new SaleItemDetailsDto
             {
                 SaleItemId = si.SaleItemId,
