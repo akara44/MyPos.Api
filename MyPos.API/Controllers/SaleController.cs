@@ -10,8 +10,8 @@ using System.Threading.Tasks;
 [Route("api/[controller]")]
 public class SaleController : ControllerBase
 {
-    private readonly MyPosDbContext _context; // DbContext'iniz
-    private readonly SaleValidator _validator; // DTO'ları doğrulamak için
+    private readonly MyPosDbContext _context;
+    private readonly SaleValidator _validator;
 
     public SaleController(MyPosDbContext context)
     {
@@ -22,43 +22,29 @@ public class SaleController : ControllerBase
     [HttpPost("create")]
     public async Task<IActionResult> CreateSale([FromBody] CreateSaleRequestDto request)
     {
-        // 1. Gelen veriyi doğrula
         var validationResult = _validator.Validate(request);
         if (!validationResult.IsValid)
-        {
             return BadRequest(new { errors = validationResult.Errors });
-        }
 
-        // 2. İş mantığı
-        // Satış işlemini başlatmak için yeni bir Sale nesnesi oluştur.
         var sale = new Sale
         {
             CustomerId = request.CustomerId,
             SaleDate = DateTime.Now,
             IsCompleted = false,
-            // TotalAmount ve PaymentType finalize edilene kadar 0 veya null kalır.
             TotalAmount = 0,
             PaymentType = null
         };
         _context.Sales.Add(sale);
         await _context.SaveChangesAsync();
 
-        // Her bir satış kalemi için SaleItem oluştur.
         foreach (var itemDto in request.SaleItems)
         {
-            // Ürün bilgilerini stoktan çek
             var product = await _context.Products.FindAsync(itemDto.ProductId);
             if (product == null)
-            {
-                // Ürün bulunamazsa hata dön
                 return NotFound($"Ürün ID'si {itemDto.ProductId} bulunamadı.");
-            }
 
-            // Stok kontrolü yap (Satışın finalize edilmesi aşamasına da bırakılabilir)
             if (product.Stock < itemDto.Quantity)
-            {
                 return BadRequest($"Ürün '{product.Name}' için yeterli stok yok. Mevcut stok: {product.Stock}.");
-            }
 
             var saleItem = new SaleItem
             {
@@ -66,7 +52,7 @@ public class SaleController : ControllerBase
                 ProductId = itemDto.ProductId,
                 ProductName = product.Name,
                 Quantity = itemDto.Quantity,
-                UnitPrice = product.SalePrice, // Örnek olarak product.UnitPrice kullanıldı
+                UnitPrice = product.SalePrice,
                 TotalPrice = itemDto.Quantity * product.SalePrice,
                 Discount = 0
             };
@@ -76,7 +62,6 @@ public class SaleController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // CUSTOMER ADINI ÇEKMEK İÇİN KOD EKLENDİ
         string? customerName = null;
         if (sale.CustomerId.HasValue)
         {
@@ -84,12 +69,11 @@ public class SaleController : ControllerBase
             customerName = customer?.CustomerName;
         }
 
-        // Front-end'e oluşturulan satışın ID'sini ve detaylarını dön.
         var saleDetailsDto = new SaleDetailsDto
         {
             SaleId = sale.SaleId,
             CustomerId = sale.CustomerId,
-            CustomerName = customerName, // DTO'ya customerName atandı
+            CustomerName = customerName,
             TotalAmount = sale.TotalAmount,
             SaleDate = sale.SaleDate,
             IsCompleted = sale.IsCompleted,
@@ -115,39 +99,34 @@ public class SaleController : ControllerBase
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            // Satışı bul
             var sale = await _context.Sales
                 .Include(s => s.SaleItems)
                 .FirstOrDefaultAsync(s => s.SaleId == saleId);
 
             if (sale == null)
-            {
                 return NotFound($"Satış ID'si {saleId} bulunamadı.");
-            }
 
-            // Satış zaten tamamlanmış mı diye kontrol et
             if (sale.IsCompleted)
-            {
                 return BadRequest("Bu satış zaten tamamlanmış.");
-            }
 
-            // 1. Ödeme işlemini yap (bu kısım gerçek bir API çağrısı olabilir)
-            sale.PaymentType = request.PaymentType;
+            // PaymentType DB’den çekiliyor
+            var paymentType = await _context.PaymentTypes.FindAsync(request.PaymentTypeId);
+            if (paymentType == null)
+                return BadRequest("Seçilen ödeme tipi bulunamadı.");
 
-            // 2. Stokları güncelle ve hareketleri kaydet
+            sale.PaymentType = paymentType.Name;
+
             foreach (var saleItem in sale.SaleItems)
             {
                 var product = await _context.Products.FindAsync(saleItem.ProductId);
                 if (product != null)
                 {
-                    // Stoktan düşüş
                     product.Stock -= saleItem.Quantity;
 
-                    // Stok hareketini kaydet
                     _context.StockTransaction.Add(new StockTransaction
                     {
                         ProductId = product.Id,
-                        QuantityChange = -saleItem.Quantity, // Satış olduğu için negatif değer
+                        QuantityChange = -saleItem.Quantity,
                         TransactionType = "OUT",
                         Reason = $"Sale:{saleId}",
                         Date = DateTime.Now,
@@ -156,13 +135,17 @@ public class SaleController : ControllerBase
                 }
             }
 
-            // 3. Satışı tamamlanmış olarak işaretle
             sale.IsCompleted = true;
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return Ok(new { message = "Satış başarıyla tamamlandı.", saleId = sale.SaleId });
+            return Ok(new
+            {
+                message = "Satış başarıyla tamamlandı.",
+                saleId = sale.SaleId,
+                paymentType = sale.PaymentType
+            });
         }
         catch (Exception ex)
         {
@@ -180,9 +163,7 @@ public class SaleController : ControllerBase
             .FirstOrDefaultAsync(s => s.SaleId == saleId);
 
         if (sale == null)
-        {
             return NotFound();
-        }
 
         var saleDetailsDto = new SaleDetailsDto
         {
@@ -209,9 +190,9 @@ public class SaleController : ControllerBase
     }
 }
 
-// FinalizeSale için yeni bir DTO
+// DTO
 public class FinalizeSaleRequestDto
 {
     [Required]
-    public string PaymentType { get; set; }
+    public int PaymentTypeId { get; set; } // DB’den PaymentType ID
 }
