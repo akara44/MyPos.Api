@@ -55,11 +55,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // 4. CORS Konfigürasyonu (Frontend için eklendi)
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowVueApp", policy =>
+    options.AddPolicy("AllowAll", builder =>
     {
-        policy.WithOrigins("http://localhost:5173") // Vue uygulamanın adresi
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        builder.AllowAnyOrigin() // Tüm kaynaklara izin verir
+               .AllowAnyMethod() // Tüm HTTP metodlarına izin verir (GET, POST, vb.)
+               .AllowAnyHeader(); // Tüm başlıklara izin verir
     });
 });
 
@@ -84,10 +84,11 @@ app.UseHttpsRedirection();
 // app.UseCors("AllowFrontend");
 
 app.UseStaticFiles(); // wwwroot klasöründeki statik dosyalara erişim için
+app.UseCors("AllowAll");
 app.UseRouting();
 
 // CORS politikası UseRouting() çağrısından sonra, UseAuthentication() ve UseAuthorization() çağrılarından önce gelmelidir.
-app.UseCors("AllowVueApp");
+
 
 app.UseAuthentication();
 app.UseAuthorization();
