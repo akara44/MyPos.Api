@@ -10,16 +10,22 @@ public class Payment
     public int Id { get; set; }
 
     [Required]
-    public int CustomerId { get; set; }
+    public int SaleId { get; set; }   // EKLENDİ
 
     [Required]
+    public int CustomerId { get; set; }
+
     [Column(TypeName = "decimal(18, 2)")]
     public decimal Amount { get; set; }
 
-    [Required]
     public DateTime PaymentDate { get; set; }
 
-  
+    [Required]
+    public string PaymentTypeName { get; set; } // EKLENDİ
+
+    [ForeignKey("SaleId")]
+    public Sale Sale { get; set; }
+
     [ForeignKey("CustomerId")]
     public Customer Customer { get; set; }
 }
