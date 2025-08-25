@@ -154,6 +154,55 @@ public class SaleController : ControllerBase
         }
     }
 
+    [HttpPost("{saleId}/finalize-split")]
+    public async Task<IActionResult> FinalizeSaleSplit(int saleId, [FromBody] SplitPaymentRequestDto request)
+    {
+        var sale = await _context.Sales.FindAsync(saleId);
+        if (sale == null) return NotFound("Satış bulunamadı.");
+        if (sale.IsCompleted) return BadRequest("Satış zaten tamamlanmış.");
+
+        // parçalı toplam kontrolü
+        var totalSplit = request.SplitPayments.Sum(x => x.Amount);
+        if (totalSplit != sale.TotalAmount)
+            return BadRequest($"Parçalı ödemelerin toplamı ({totalSplit}) satış tutarına ({sale.TotalAmount}) eşit değil.");
+
+        foreach (var sp in request.SplitPayments)
+        {
+            string paymentTypeName;
+
+            // Default yöntemler
+            if (sp.PaymentTypeName == "Nakit" || sp.PaymentTypeName == "POS")
+            {
+                paymentTypeName = sp.PaymentTypeName;
+            }
+            else
+            {
+                // DB'den kontrol
+                if (sp.PaymentTypeId == null)
+                    return BadRequest("DB ödeme tipi için PaymentTypeId boş olamaz.");
+
+                var paymentType = await _context.PaymentTypes.FindAsync(sp.PaymentTypeId.Value);
+                if (paymentType == null) return BadRequest($"Geçersiz ödeme tipi: {sp.PaymentTypeId}");
+                paymentTypeName = paymentType.Name;
+            }
+
+            _context.Payments.Add(new Payment
+            {
+                SaleId = sale.SaleId,
+                CustomerId = sale.CustomerId ?? 0,
+                Amount = sp.Amount,
+                PaymentDate = DateTime.Now,
+                PaymentTypeName = paymentTypeName
+            });
+        }
+
+        sale.IsCompleted = true;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Satış parçalı ödeme ile tamamlandı." });
+    }
+
+
     [HttpGet("{saleId}")]
     public async Task<IActionResult> GetSaleById(int saleId)
     {
@@ -190,9 +239,22 @@ public class SaleController : ControllerBase
     }
 }
 
+
+
 // DTO
 public class FinalizeSaleRequestDto
 {
     [Required]
     public int PaymentTypeId { get; set; } // DB’den PaymentType ID
+}
+public class SplitPaymentRequestDto
+{
+    public List<SplitPaymentDto> SplitPayments { get; set; }
+}
+
+public class SplitPaymentDto
+{
+    public string PaymentTypeName { get; set; } // "Nakit", "POS" ya da DB’den gelen isim
+    public int? PaymentTypeId { get; set; }     // sadece DB’den gelenler için kullanılır
+    public decimal Amount { get; set; }
 }
