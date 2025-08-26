@@ -88,8 +88,12 @@
                 TaxRate = product.TaxRate,
                 ProductGroupId = product.ProductGroupId,
                 ProductGroupName = productGroup.Name,
+                SalePageList = string.IsNullOrEmpty(product.SalePageList) ? "Liste1" : product.SalePageList,
+                Unit = string.IsNullOrEmpty(product.Unit) ? "Adet" : product.Unit,
+                OriginCountry = string.IsNullOrEmpty(product.OriginCountry) ? "Türkiye" : product.OriginCountry,
                 ImageUrl = product.ImageUrl
             };
+
 
             return CreatedAtAction(
                 actionName: nameof(GetProductByBarcode),

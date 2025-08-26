@@ -11,14 +11,14 @@ namespace MyPos.Application.Dtos
         public string Name { get; set; } = string.Empty;
 
         public int Stock { get; set; } = 0;
-        public int CriticalStockLevel { get; set; } = 10; // Varsayılan değer
+        public int CriticalStockLevel { get; set; } // Varsayılan değer
         public decimal SalePrice { get; set; }
         public decimal PurchasePrice { get; set; }
-        public int TaxRate { get; set; } = 18; // Varsayılan KDV
-        public string SalePageList { get; set; } = "Liste1";
+        public int TaxRate { get; set; } // Varsayılan KDV
+        public string SalePageList { get; set; }
         public int? ProductGroupId { get; set; }    
-        public string Unit { get; set; } = "Adet";
-        public string OriginCountry { get; set; } = "Türkiye";                                                                                    
+        public string Unit { get; set; }
+        public string OriginCountry { get; set; }                                                                                  
         // ImageUrl'ü CreateProductDto'ya da eklemek isterseniz buraya ekleyebilirsiniz,
         // ancak genellikle resim yükleme ayrı bir adım olduğu için sadece Response DTO'da bulunur.
         // public string? ImageUrl { get; set; } // Eğer ürün oluşturulurken URL sağlanacaksa
