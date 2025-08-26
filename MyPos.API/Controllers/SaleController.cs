@@ -237,8 +237,41 @@ public class SaleController : ControllerBase
 
         return Ok(saleDetailsDto);
     }
+    [HttpGet("all")]
+    public async Task<IActionResult> GetAllSales()
+    {
+        var sales = await _context.Sales
+            .Include(s => s.Customer)
+            .Include(s => s.SaleItems)
+            .ToListAsync();
+
+        var salesDto = sales.Select(s => new SaleDetailsDto
+        {
+            SaleId = s.SaleId,
+            CustomerId = s.CustomerId,
+            CustomerName = s.Customer?.CustomerName,
+            TotalAmount = s.TotalAmount,
+            PaymentType = s.PaymentType,
+            SaleDate = s.SaleDate,
+            IsCompleted = s.IsCompleted,
+            SaleItems = s.SaleItems.Select(si => new SaleItemDetailsDto
+            {
+                SaleItemId = si.SaleItemId,
+                ProductId = si.ProductId,
+                ProductName = si.ProductName,
+                Quantity = si.Quantity,
+                UnitPrice = si.UnitPrice,
+                TotalPrice = si.TotalPrice,
+                Discount = si.Discount
+            }).ToList()
+        }).ToList();
+
+        return Ok(salesDto);
+    }
 }
-// DTO
+
+
+// DTO laı ayırmayı unutma ===!!!   
 public class FinalizeSaleRequestDto
 {
     [Required]
