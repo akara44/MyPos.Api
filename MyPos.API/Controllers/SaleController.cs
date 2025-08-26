@@ -238,9 +238,6 @@ public class SaleController : ControllerBase
         return Ok(saleDetailsDto);
     }
 }
-
-
-
 // DTO
 public class FinalizeSaleRequestDto
 {
