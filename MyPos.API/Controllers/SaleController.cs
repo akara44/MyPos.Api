@@ -299,3 +299,4 @@ public class SplitPaymentDto
     public int? PaymentTypeId { get; set; }     // sadece DB’den gelenler için kullanılır
     public decimal Amount { get; set; }
 }
+ 
