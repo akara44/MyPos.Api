@@ -26,6 +26,12 @@ public class SaleController : ControllerBase
         if (!validationResult.IsValid)
             return BadRequest(new { errors = validationResult.Errors });
 
+        // 🔥 Tek seferde bütün Product'ları çek
+        var productIds = request.SaleItems.Select(x => x.ProductId).ToList();
+        var products = await _context.Products
+            .Where(p => productIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id);
+
         var sale = new Sale
         {
             CustomerId = request.CustomerId,
@@ -33,13 +39,12 @@ public class SaleController : ControllerBase
             IsCompleted = false,
             TotalAmount = 0,
             PaymentType = null,
-            SaleItems = new List<SaleItem>() // 🔥 boş liste oluştur
+            SaleItems = new List<SaleItem>()
         };
 
         foreach (var itemDto in request.SaleItems)
         {
-            var product = await _context.Products.FindAsync(itemDto.ProductId);
-            if (product == null)
+            if (!products.TryGetValue(itemDto.ProductId, out var product))
                 return NotFound($"Ürün ID'si {itemDto.ProductId} bulunamadı.");
 
             if (product.Stock < itemDto.Quantity)
@@ -56,20 +61,19 @@ public class SaleController : ControllerBase
             };
 
             sale.TotalAmount += saleItem.TotalPrice;
-
-            // 🔥 Hem SaleItems navigation listesine hem de DbSet'e ekle
             sale.SaleItems.Add(saleItem);
         }
 
         _context.Sales.Add(sale);
         await _context.SaveChangesAsync();
 
+        // 🔥 Customer lookup sadece gerekirse yapılacak
         string? customerName = null;
         if (sale.CustomerId.HasValue)
-        {
-            var customer = await _context.Customers.FindAsync(sale.CustomerId.Value);
-            customerName = customer?.CustomerName;
-        }
+            customerName = await _context.Customers
+                .Where(c => c.Id == sale.CustomerId.Value)
+                .Select(c => c.CustomerName)
+                .FirstOrDefaultAsync();
 
         var saleDetailsDto = new SaleDetailsDto
         {
@@ -112,30 +116,34 @@ public class SaleController : ControllerBase
             if (sale.IsCompleted)
                 return BadRequest("Bu satış zaten tamamlanmış.");
 
-            // PaymentType DB’den çekiliyor
             var paymentType = await _context.PaymentTypes.FindAsync(request.PaymentTypeId);
             if (paymentType == null)
                 return BadRequest("Seçilen ödeme tipi bulunamadı.");
 
             sale.PaymentType = paymentType.Name;
 
+            // 🔥 Tek query ile tüm ürünleri al
+            var productIds = sale.SaleItems.Select(si => si.ProductId).ToList();
+            var products = await _context.Products
+                .Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
             foreach (var saleItem in sale.SaleItems)
             {
-                var product = await _context.Products.FindAsync(saleItem.ProductId);
-                if (product != null)
-                {
-                    product.Stock -= saleItem.Quantity;
+                if (!products.TryGetValue(saleItem.ProductId, out var product))
+                    continue;
 
-                    _context.StockTransaction.Add(new StockTransaction
-                    {
-                        ProductId = product.Id,
-                        QuantityChange = -saleItem.Quantity,
-                        TransactionType = "OUT",
-                        Reason = $"Sale:{saleId}",
-                        Date = DateTime.Now,
-                        BalanceAfter = product.Stock
-                    });
-                }
+                product.Stock -= saleItem.Quantity;
+
+                _context.StockTransaction.Add(new StockTransaction
+                {
+                    ProductId = product.Id,
+                    QuantityChange = -saleItem.Quantity,
+                    TransactionType = "OUT",
+                    Reason = $"Sale:{saleId}",
+                    Date = DateTime.Now,
+                    BalanceAfter = product.Stock
+                });
             }
 
             sale.IsCompleted = true;
