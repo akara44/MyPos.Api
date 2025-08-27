@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.Dtos;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 using System.ComponentModel.DataAnnotations;
@@ -27,19 +26,7 @@ public class SaleController : ControllerBase
         if (!validationResult.IsValid)
             return BadRequest(new { errors = validationResult.Errors });
 
-        // İndirim validasyonu
-        if (request.DiscountValue.HasValue)
-        {
-            if (string.IsNullOrEmpty(request.DiscountType))
-                return BadRequest("İndirim değeri girildiğinde indirim tipi de belirtilmelidir.");
-
-            if (request.DiscountValue <= 0)
-                return BadRequest("İndirim değeri 0'dan büyük olmalıdır.");
-
-            if (request.DiscountType == "PERCENTAGE" && request.DiscountValue > 100)
-                return BadRequest("Yüzde indirimi 100'den fazla olamaz.");
-        }
-
+        // 🔥 Tek seferde bütün Product'ları çek
         var productIds = request.SaleItems.Select(x => x.ProductId).ToList();
         var products = await _context.Products
             .Where(p => productIds.Contains(p.Id))
@@ -50,17 +37,11 @@ public class SaleController : ControllerBase
             CustomerId = request.CustomerId,
             SaleDate = DateTime.Now,
             IsCompleted = false,
-            SubTotalAmount = 0,
-            DiscountAmount = 0,
-            MiscellaneousTotal = 0,
             TotalAmount = 0,
             PaymentType = null,
-            IsDiscountApplied = false,
-            SaleItems = new List<SaleItem>(),
-            SaleMiscellaneous = new List<SaleMiscellaneous>()
+            SaleItems = new List<SaleItem>()
         };
 
-        // Ürün kalemlerini ekle
         foreach (var itemDto in request.SaleItems)
         {
             if (!products.TryGetValue(itemDto.ProductId, out var product))
@@ -79,60 +60,44 @@ public class SaleController : ControllerBase
                 Discount = 0
             };
 
-            sale.SubTotalAmount += saleItem.TotalPrice;
+            sale.TotalAmount += saleItem.TotalPrice;
             sale.SaleItems.Add(saleItem);
         }
-
-        // İndirim uygula (varsa)
-        if (request.DiscountValue.HasValue && !string.IsNullOrEmpty(request.DiscountType))
-        {
-            decimal discountAmount = 0;
-
-            if (request.DiscountType == "PERCENTAGE")
-            {
-                discountAmount = sale.SubTotalAmount * (request.DiscountValue.Value / 100);
-            }
-            else if (request.DiscountType == "AMOUNT")
-            {
-                if (request.DiscountValue.Value > sale.SubTotalAmount)
-                    return BadRequest("İndirim tutarı, ara toplamdan fazla olamaz.");
-
-                discountAmount = request.DiscountValue.Value;
-            }
-
-            sale.DiscountType = request.DiscountType;
-            sale.DiscountValue = request.DiscountValue.Value;
-            sale.DiscountAmount = discountAmount;
-            sale.IsDiscountApplied = true;
-        }
-
-        // Muhtelif tutarları ekle (varsa)
-        if (request.MiscellaneousItems != null && request.MiscellaneousItems.Any())
-        {
-            foreach (var miscItem in request.MiscellaneousItems)
-            {
-                var saleMisc = new SaleMiscellaneous
-                {
-                    Description = miscItem.Description,
-                    Amount = miscItem.Amount,
-                    CreatedDate = DateTime.Now
-                };
-
-                sale.SaleMiscellaneous.Add(saleMisc);
-                sale.MiscellaneousTotal += miscItem.Amount;
-            }
-        }
-
-        // Toplam tutarı hesapla
-        sale.TotalAmount = sale.SubTotalAmount - sale.DiscountAmount + sale.MiscellaneousTotal;
 
         _context.Sales.Add(sale);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetSaleById), new { saleId = sale.SaleId },
-            await GetSaleDetailsDto(sale.SaleId));
-    }
+        // 🔥 Customer lookup sadece gerekirse yapılacak
+        string? customerName = null;
+        if (sale.CustomerId.HasValue)
+            customerName = await _context.Customers
+                .Where(c => c.Id == sale.CustomerId.Value)
+                .Select(c => c.CustomerName)
+                .FirstOrDefaultAsync();
 
+        var saleDetailsDto = new SaleDetailsDto
+        {
+            SaleId = sale.SaleId,
+            CustomerId = sale.CustomerId,
+            CustomerName = customerName,
+            TotalAmount = sale.TotalAmount,
+            SaleDate = sale.SaleDate,
+            IsCompleted = sale.IsCompleted,
+            PaymentType = sale.PaymentType,
+            SaleItems = sale.SaleItems.Select(si => new SaleItemDetailsDto
+            {
+                SaleItemId = si.SaleItemId,
+                ProductId = si.ProductId,
+                ProductName = si.ProductName,
+                Quantity = si.Quantity,
+                UnitPrice = si.UnitPrice,
+                TotalPrice = si.TotalPrice,
+                Discount = si.Discount
+            }).ToList()
+        };
+
+        return CreatedAtAction(nameof(GetSaleById), new { saleId = sale.SaleId }, saleDetailsDto);
+    }
 
 
     [HttpPost("{saleId}/finalize")]
@@ -157,7 +122,7 @@ public class SaleController : ControllerBase
 
             sale.PaymentType = paymentType.Name;
 
-            // Tek query ile tüm ürünleri al
+            // 🔥 Tek query ile tüm ürünleri al
             var productIds = sale.SaleItems.Select(si => si.ProductId).ToList();
             var products = await _context.Products
                 .Where(p => productIds.Contains(p.Id))
@@ -169,6 +134,7 @@ public class SaleController : ControllerBase
                     continue;
 
                 product.Stock -= saleItem.Quantity;
+
                 _context.StockTransaction.Add(new StockTransaction
                 {
                     ProductId = product.Id,
@@ -181,6 +147,7 @@ public class SaleController : ControllerBase
             }
 
             sale.IsCompleted = true;
+
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
@@ -188,8 +155,7 @@ public class SaleController : ControllerBase
             {
                 message = "Satış başarıyla tamamlandı.",
                 saleId = sale.SaleId,
-                paymentType = sale.PaymentType,
-                totalAmount = sale.TotalAmount // Güncellenmiş toplam tutar
+                paymentType = sale.PaymentType
             });
         }
         catch (Exception ex)
@@ -203,13 +169,10 @@ public class SaleController : ControllerBase
     public async Task<IActionResult> FinalizeSaleSplit(int saleId, [FromBody] SplitPaymentRequestDto request)
     {
         var sale = await _context.Sales.FindAsync(saleId);
-        if (sale == null)
-            return NotFound("Satış bulunamadı.");
+        if (sale == null) return NotFound("Satış bulunamadı.");
+        if (sale.IsCompleted) return BadRequest("Satış zaten tamamlanmış.");
 
-        if (sale.IsCompleted)
-            return BadRequest("Satış zaten tamamlanmış.");
-
-        // Parçalı toplam kontrolü - TotalAmount kullanıyoruz (indirim ve muhtelif tutarlar dahil)
+        // parçalı toplam kontrolü
         var totalSplit = request.SplitPayments.Sum(x => x.Amount);
         if (totalSplit != sale.TotalAmount)
             return BadRequest($"Parçalı ödemelerin toplamı ({totalSplit}) satış tutarına ({sale.TotalAmount}) eşit değil.");
@@ -217,6 +180,7 @@ public class SaleController : ControllerBase
         foreach (var sp in request.SplitPayments)
         {
             string paymentTypeName;
+
             // Default yöntemler
             if (sp.PaymentTypeName == "Nakit" || sp.PaymentTypeName == "POS")
             {
@@ -229,9 +193,7 @@ public class SaleController : ControllerBase
                     return BadRequest("DB ödeme tipi için PaymentTypeId boş olamaz.");
 
                 var paymentType = await _context.PaymentTypes.FindAsync(sp.PaymentTypeId.Value);
-                if (paymentType == null)
-                    return BadRequest($"Geçersiz ödeme tipi: {sp.PaymentTypeId}");
-
+                if (paymentType == null) return BadRequest($"Geçersiz ödeme tipi: {sp.PaymentTypeId}");
                 paymentTypeName = paymentType.Name;
             }
 
@@ -248,49 +210,30 @@ public class SaleController : ControllerBase
         sale.IsCompleted = true;
         await _context.SaveChangesAsync();
 
-        return Ok(new
-        {
-            message = "Satış parçalı ödeme ile tamamlandı.",
-            totalAmount = sale.TotalAmount
-        });
+        return Ok(new { message = "Satış parçalı ödeme ile tamamlandı." });
     }
 
-[HttpGet("{saleId}")]
+
+    [HttpGet("{saleId}")]
     public async Task<IActionResult> GetSaleById(int saleId)
-    {
-        var saleDetailsDto = await GetSaleDetailsDto(saleId);
-        if (saleDetailsDto == null)
-            return NotFound();
-
-        return Ok(saleDetailsDto);
-    }
-
-    private async Task<SaleDetailsDto?> GetSaleDetailsDto(int saleId)
     {
         var sale = await _context.Sales
             .Include(s => s.Customer)
             .Include(s => s.SaleItems)
-            .Include(s => s.SaleMiscellaneous)
             .FirstOrDefaultAsync(s => s.SaleId == saleId);
 
         if (sale == null)
-            return null;
+            return NotFound();
 
-        return new SaleDetailsDto
+        var saleDetailsDto = new SaleDetailsDto
         {
             SaleId = sale.SaleId,
             CustomerId = sale.CustomerId,
             CustomerName = sale.Customer?.CustomerName,
-            SubTotalAmount = sale.SubTotalAmount,
-            DiscountAmount = sale.DiscountAmount,
-            DiscountType = sale.DiscountType,
-            DiscountValue = sale.DiscountValue,
-            MiscellaneousTotal = sale.MiscellaneousTotal,
             TotalAmount = sale.TotalAmount,
             PaymentType = sale.PaymentType,
             SaleDate = sale.SaleDate,
             IsCompleted = sale.IsCompleted,
-            IsDiscountApplied = sale.IsDiscountApplied,
             SaleItems = sale.SaleItems.Select(si => new SaleItemDetailsDto
             {
                 SaleItemId = si.SaleItemId,
@@ -300,15 +243,10 @@ public class SaleController : ControllerBase
                 UnitPrice = si.UnitPrice,
                 TotalPrice = si.TotalPrice,
                 Discount = si.Discount
-            }).ToList(),
-            SaleMiscellaneous = sale.SaleMiscellaneous.Select(sm => new SaleMiscellaneousDto
-            {
-                SaleMiscellaneousId = sm.SaleMiscellaneousId,
-                Description = sm.Description,
-                Amount = sm.Amount,
-                CreatedDate = sm.CreatedDate
             }).ToList()
         };
+
+        return Ok(saleDetailsDto);
     }
     [HttpGet("all")]
     public async Task<IActionResult> GetAllSales()
@@ -316,7 +254,6 @@ public class SaleController : ControllerBase
         var sales = await _context.Sales
             .Include(s => s.Customer)
             .Include(s => s.SaleItems)
-            .Include(s => s.SaleMiscellaneous)
             .ToListAsync();
 
         var salesDto = sales.Select(s => new SaleDetailsDto
@@ -324,16 +261,10 @@ public class SaleController : ControllerBase
             SaleId = s.SaleId,
             CustomerId = s.CustomerId,
             CustomerName = s.Customer?.CustomerName,
-            SubTotalAmount = s.SubTotalAmount,
-            DiscountAmount = s.DiscountAmount,
-            DiscountType = s.DiscountType,
-            DiscountValue = s.DiscountValue,
-            MiscellaneousTotal = s.MiscellaneousTotal,
             TotalAmount = s.TotalAmount,
             PaymentType = s.PaymentType,
             SaleDate = s.SaleDate,
             IsCompleted = s.IsCompleted,
-            IsDiscountApplied = s.IsDiscountApplied,
             SaleItems = s.SaleItems.Select(si => new SaleItemDetailsDto
             {
                 SaleItemId = si.SaleItemId,
@@ -343,13 +274,6 @@ public class SaleController : ControllerBase
                 UnitPrice = si.UnitPrice,
                 TotalPrice = si.TotalPrice,
                 Discount = si.Discount
-            }).ToList(),
-            SaleMiscellaneous = s.SaleMiscellaneous.Select(sm => new SaleMiscellaneousDto
-            {
-                SaleMiscellaneousId = sm.SaleMiscellaneousId,
-                Description = sm.Description,
-                Amount = sm.Amount,
-                CreatedDate = sm.CreatedDate
             }).ToList()
         }).ToList();
 
