@@ -32,10 +32,9 @@ public class SaleController : ControllerBase
             SaleDate = DateTime.Now,
             IsCompleted = false,
             TotalAmount = 0,
-            PaymentType = null
+            PaymentType = null,
+            SaleItems = new List<SaleItem>() // 🔥 boş liste oluştur
         };
-        _context.Sales.Add(sale);
-        await _context.SaveChangesAsync();
 
         foreach (var itemDto in request.SaleItems)
         {
@@ -48,7 +47,6 @@ public class SaleController : ControllerBase
 
             var saleItem = new SaleItem
             {
-                SaleId = sale.SaleId,
                 ProductId = itemDto.ProductId,
                 ProductName = product.Name,
                 Quantity = itemDto.Quantity,
@@ -56,10 +54,14 @@ public class SaleController : ControllerBase
                 TotalPrice = itemDto.Quantity * product.SalePrice,
                 Discount = 0
             };
+
             sale.TotalAmount += saleItem.TotalPrice;
-            _context.SaleItems.Add(saleItem);
+
+            // 🔥 Hem SaleItems navigation listesine hem de DbSet'e ekle
+            sale.SaleItems.Add(saleItem);
         }
 
+        _context.Sales.Add(sale);
         await _context.SaveChangesAsync();
 
         string? customerName = null;
@@ -92,6 +94,7 @@ public class SaleController : ControllerBase
 
         return CreatedAtAction(nameof(GetSaleById), new { saleId = sale.SaleId }, saleDetailsDto);
     }
+
 
     [HttpPost("{saleId}/finalize")]
     public async Task<IActionResult> FinalizeSale(int saleId, [FromBody] FinalizeSaleRequestDto request)
