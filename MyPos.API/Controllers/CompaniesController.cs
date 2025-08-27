@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Application.DTOs; 
@@ -10,8 +11,9 @@ using System.Threading.Tasks;
 
 namespace MyPos.WebApi.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
+    [Authorize]
     public class CompaniesController : ControllerBase
     {
         private readonly MyPosDbContext _context;
