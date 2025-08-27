@@ -1,15 +1,18 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos;
-using MyPos.Infrastructure.Persistence; 
 using MyPos.Domain.Entities; 
+using MyPos.Infrastructure.Persistence; 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-[ApiController]
+
 [Route("api/[controller]")]
+[ApiController]
+[Authorize]
 public class OrderController : ControllerBase
 {
     private readonly MyPosDbContext _context;

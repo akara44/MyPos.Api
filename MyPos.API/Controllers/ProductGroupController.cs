@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos;
@@ -6,9 +7,9 @@ using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 
 namespace MyPos.API.Controllers;
-
-[ApiController]
 [Route("api/[controller]")]
+[ApiController]
+[Authorize]
 public class ProductGroupController : ControllerBase
 {
     private readonly MyPosDbContext _context;

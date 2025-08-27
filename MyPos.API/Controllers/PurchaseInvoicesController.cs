@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos;
@@ -7,8 +8,9 @@ using MyPos.Infrastructure.Persistence;
 
 namespace MyPos.Api.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
+    [Authorize]
     public class PurchaseInvoicesController : ControllerBase
     {
         private readonly MyPosDbContext _context;

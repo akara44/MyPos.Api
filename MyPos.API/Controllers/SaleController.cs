@@ -1,13 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
-
-[ApiController]
 [Route("api/[controller]")]
+[ApiController]
+[Authorize]
 public class SaleController : ControllerBase
 {
     private readonly MyPosDbContext _context;

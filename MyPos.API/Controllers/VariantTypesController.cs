@@ -1,14 +1,16 @@
 ﻿using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Infrastructure.Persistence;
 using MyPos.Application.Dtos;
 using MyPos.Domain.Entities;
+using MyPos.Infrastructure.Persistence;
 
 namespace MyPos.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class VariantTypesController : ControllerBase
     {
         private readonly MyPosDbContext _context;

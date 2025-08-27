@@ -1,12 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MyPos.Infrastructure.Migrations;
 using MyPos.Infrastructure.Persistence;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using System;
 
-[ApiController]
 [Route("api/[controller]")]
+[ApiController]
+[Authorize]
 public class PersonnelController : ControllerBase
 {
     private readonly MyPosDbContext _context;
