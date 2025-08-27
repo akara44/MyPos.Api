@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos;
 using MyPos.Infrastructure.Persistence;
@@ -6,9 +7,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-
-[ApiController]
 [Route("api/[controller]")]
+[ApiController]
+[Authorize]
 public class CustomerController : ControllerBase
 {
     // Veritabanı bağlamını (DbContext) kullanmak için bir alan tanımlıyoruz.
