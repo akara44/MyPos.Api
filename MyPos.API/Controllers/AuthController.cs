@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MyPos.Application.Dtos;
-using MyPos.Domain.Entities;
+using MyPos.Domain.Entities;    
 using MyPos.Infrastructure.Persistence;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -46,7 +46,8 @@ public class AuthController : ControllerBase
             City = dto.City ?? string.Empty,
             Email = dto.Email ?? string.Empty,
             PasswordHash = hash,
-            PasswordSalt = salt
+            PasswordSalt = salt,
+            Role = "Admin"
         };
 
         _context.Users.Add(user);
@@ -94,6 +95,7 @@ public class AuthController : ControllerBase
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
+            new Claim(ClaimTypes.Role, user.Role),
             new Claim("Company", user.CompanyName ?? string.Empty),
             new Claim("City", user.City ?? string.Empty)
         };
