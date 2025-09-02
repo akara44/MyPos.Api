@@ -104,3 +104,4 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+// Authorizeleri Açmayı Unutma

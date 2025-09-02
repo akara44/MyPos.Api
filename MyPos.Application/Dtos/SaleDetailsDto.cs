@@ -4,6 +4,8 @@ using System.Collections.Generic;
 public class SaleDetailsDto
 {
     public int SaleId { get; set; }
+    public string SaleCode { get; set; }
+    public int TotalQuantity { get; set; } 
     public int? CustomerId { get; set; }
     public string? CustomerName { get; set; }
     public decimal SubTotalAmount { get; set; }

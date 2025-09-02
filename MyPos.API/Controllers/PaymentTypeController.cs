@@ -10,7 +10,7 @@ namespace MyPos.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize]
+    //[Authorize]
     public class PaymentTypesController : ControllerBase
     {
         private readonly MyPosDbContext _context;

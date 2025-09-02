@@ -2,13 +2,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Domain.Entities;
+using MyPos.Infrastructure.Migrations;
 using MyPos.Infrastructure.Persistence;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+//[Authorize]
 public class SaleController : ControllerBase
 {
     private readonly MyPosDbContext _context;
@@ -57,7 +58,11 @@ public class SaleController : ControllerBase
             PaymentType = null,
             IsDiscountApplied = false,
             SaleItems = new List<SaleItem>(),
-            SaleMiscellaneous = new List<SaleMiscellaneous>()
+            SaleMiscellaneous = new List<SaleMiscellaneous>(),
+
+            // 🔥 Yeni alanlar
+            SaleCode = $"SAL-{DateTime.Now:yyyyMMddHHmmss}-{Guid.NewGuid().ToString().Substring(0, 6)}",
+            TotalQuantity = 0
         };
 
         // Ürün kalemlerini ekle
@@ -80,6 +85,7 @@ public class SaleController : ControllerBase
             };
 
             sale.SubTotalAmount += saleItem.TotalPrice;
+            sale.TotalQuantity += itemDto.Quantity; // 🔥 ürün adedi eklendi
             sale.SaleItems.Add(saleItem);
         }
 
@@ -172,6 +178,8 @@ public class SaleController : ControllerBase
             SaleDate = sale.SaleDate,
             IsCompleted = sale.IsCompleted,
             IsDiscountApplied = sale.IsDiscountApplied,
+            SaleCode = sale.SaleCode,
+            TotalQuantity = sale.TotalQuantity,
             SaleItems = sale.SaleItems.Select(si => new SaleItemDetailsDto
             {
                 SaleItemId = si.SaleItemId,
@@ -216,6 +224,8 @@ public class SaleController : ControllerBase
             SaleDate = s.SaleDate,
             IsCompleted = s.IsCompleted,
             IsDiscountApplied = s.IsDiscountApplied,
+            SaleCode = s.SaleCode,
+            TotalQuantity = s.TotalQuantity,
             SaleItems = s.SaleItems.Select(si => new SaleItemDetailsDto
             {
                 SaleItemId = si.SaleItemId,

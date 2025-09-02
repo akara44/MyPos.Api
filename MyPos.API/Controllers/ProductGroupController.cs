@@ -9,7 +9,7 @@ using MyPos.Infrastructure.Persistence;
 namespace MyPos.API.Controllers;
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+//[Authorize]
 public class ProductGroupController : ControllerBase
 {
     private readonly MyPosDbContext _context;

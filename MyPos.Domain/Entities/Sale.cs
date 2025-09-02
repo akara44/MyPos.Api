@@ -33,6 +33,12 @@ public class Sale
     public bool IsCompleted { get; set; } = false;
     public bool IsDiscountApplied { get; set; } = false; // İndirim uygulandı mı kontrolü
 
+    [Required]
+    [MaxLength(50)]
+    public string SaleCode { get; set; }  // Unique satış kodu
+
+    public int TotalQuantity { get; set; } // Kaç ürün alındı toplam
+
     // Navigasyon Özellikleri
     public virtual Customer Customer { get; set; }
     public virtual ICollection<SaleItem> SaleItems { get; set; }

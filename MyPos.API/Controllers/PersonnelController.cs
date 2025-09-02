@@ -8,7 +8,7 @@ using System;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+//[Authorize]
 public class PersonnelController : ControllerBase
 {
     private readonly MyPosDbContext _context;

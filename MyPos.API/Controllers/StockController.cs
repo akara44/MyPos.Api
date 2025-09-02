@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+//[Authorize]
 public class StockController : ControllerBase
 {
     private readonly MyPosDbContext _context;

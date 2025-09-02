@@ -13,7 +13,7 @@ namespace MyPos.WebApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize]
+    //[Authorize]
     public class CompaniesController : ControllerBase
     {
         private readonly MyPosDbContext _context;

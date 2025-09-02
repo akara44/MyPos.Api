@@ -10,7 +10,7 @@ namespace MyPos.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize]
+    //[Authorize]
     public class VariantTypesController : ControllerBase
     {
         private readonly MyPosDbContext _context;

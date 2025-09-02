@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+//[Authorize]
 public class IncomeController : ControllerBase
 {
     private readonly MyPosDbContext _context;

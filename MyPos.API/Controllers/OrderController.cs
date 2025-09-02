@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+//[Authorize]
 public class OrderController : ControllerBase
 {
     private readonly MyPosDbContext _context;

@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+//[Authorize]
 public class CustomerController : ControllerBase
 {
     // Veritabanı bağlamını (DbContext) kullanmak için bir alan tanımlıyoruz.

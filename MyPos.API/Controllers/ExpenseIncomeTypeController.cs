@@ -6,7 +6,7 @@ using System;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+//[Authorize]
 public class ExpenseIncomeTypeController : ControllerBase
 {
     private readonly MyPosDbContext _context;
