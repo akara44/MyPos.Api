@@ -267,5 +267,38 @@ namespace MyPos.Api.Controllers
                 return StatusCode(500, "Fatura silinirken hata oluştu: " + ex.Message);
             }
         }
+
+        [HttpGet("all")]
+        public async Task<ActionResult<List<PurchaseInvoiceDetailsDto>>> GetAllPurchaseInvoices()
+        {
+            var invoices = await _context.PurchaseInvoices
+                .Include(i => i.Company)
+                .Include(i => i.PurchaseInvoiceItems)
+                .OrderByDescending(i => i.InvoiceDate)
+                .ToListAsync();
+
+            var dtoList = invoices.Select(invoice => new PurchaseInvoiceDetailsDto
+            {
+                Id = invoice.Id,
+                InvoiceNumber = invoice.InvoiceNumber,
+                InvoiceDate = invoice.InvoiceDate,
+                CompanyName = invoice.Company != null ? invoice.Company.Name : string.Empty,
+                TotalAmount = invoice.TotalAmount,
+                GrandTotal = invoice.GrandTotal,
+                Items = invoice.PurchaseInvoiceItems.Select(item => new PurchaseInvoiceItemDetailsDto
+                {
+                    ProductName = item.ProductName,
+                    Barcode = item.Barcode,
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice,
+                    TotalPrice = item.TotalPrice,
+                    TaxRate = item.TaxRate,
+                    DiscountRate1 = item.DiscountRate1,
+                    DiscountRate2 = item.DiscountRate2
+                }).ToList()
+            }).ToList();
+
+            return Ok(dtoList);
+        }
     }
 }
