@@ -84,6 +84,21 @@ namespace MyPos.Infrastructure.Persistence
                 .WithMany(c => c.Payments)
                 .HasForeignKey(p => p.CustomerId)
                 .IsRequired(); // CustomerId'nin zorunlu olduğunu belirtiyoruz.
+
+            modelBuilder.Entity<PurchaseInvoice>()
+             .HasOne(pi => pi.PaymentType)
+             .WithMany(pt => pt.PurchaseInvoices)
+             .HasForeignKey(pi => pi.PaymentTypeId)
+             .OnDelete(DeleteBehavior.SetNull); // Bir PaymentType silinince, ona bağlı faturaların PaymentTypeId'si NULL olur.
+
+            // Eğer isterseniz, bir fatura silinince fatura kalemleri de silinsin diye bu ilişkiyi de ekleyebilirsiniz.
+            // Bu zaten PurchaseInvoice'da PurchaseInvoiceItems koleksiyonu tanımlandığında varsayılan olarak Cascade olarak gelir.
+            // Ama açıkça belirtmek kodun anlaşılırlığını artırır.
+            modelBuilder.Entity<PurchaseInvoiceItem>()
+                .HasOne(pi => pi.PurchaseInvoice)
+                .WithMany(pi => pi.PurchaseInvoiceItems)
+                .HasForeignKey(pi => pi.PurchaseInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

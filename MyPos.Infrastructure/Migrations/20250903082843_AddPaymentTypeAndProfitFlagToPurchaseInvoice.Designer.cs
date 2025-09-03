@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyPos.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using MyPos.Infrastructure.Persistence;
 namespace MyPos.Infrastructure.Migrations
 {
     [DbContext(typeof(MyPosDbContext))]
-    partial class MyPosDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250903082843_AddPaymentTypeAndProfitFlagToPurchaseInvoice")]
+    partial class AddPaymentTypeAndProfitFlagToPurchaseInvoice
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1003,8 +1006,7 @@ namespace MyPos.Infrastructure.Migrations
 
                     b.HasOne("MyPos.Domain.Entities.PaymentType", "PaymentType")
                         .WithMany("PurchaseInvoices")
-                        .HasForeignKey("PaymentTypeId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("PaymentTypeId");
 
                     b.Navigation("Company");
 

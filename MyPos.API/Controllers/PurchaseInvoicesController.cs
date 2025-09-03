@@ -33,6 +33,11 @@ namespace MyPos.Api.Controllers
             if (!validationResult.IsValid)
                 return BadRequest(validationResult.Errors);
 
+            // Check if the payment type exists before creating the invoice
+            var paymentType = await _context.PaymentTypes.FindAsync(createDto.PaymentTypeId);
+            if (paymentType == null)
+                return BadRequest($"Ödeme tipi bulunamadı: {createDto.PaymentTypeId}");
+
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -41,6 +46,8 @@ namespace MyPos.Api.Controllers
                     InvoiceNumber = createDto.InvoiceNumber,
                     InvoiceDate = createDto.InvoiceDate,
                     CompanyId = createDto.CompanyId,
+                    PaymentTypeId = createDto.PaymentTypeId,
+                    DoesNotAffectProfit = createDto.DoesNotAffectProfit,
                     TotalAmount = 0,
                     TotalDiscount = 0,
                     TotalTaxAmount = 0,
@@ -119,6 +126,11 @@ namespace MyPos.Api.Controllers
             if (!validationResult.IsValid)
                 return BadRequest(validationResult.Errors);
 
+            // Check if the payment type exists
+            var paymentType = await _context.PaymentTypes.FindAsync(updateDto.PaymentTypeId);
+            if (paymentType == null)
+                return BadRequest($"Ödeme tipi bulunamadı: {updateDto.PaymentTypeId}");
+
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -154,6 +166,8 @@ namespace MyPos.Api.Controllers
                 invoice.InvoiceNumber = updateDto.InvoiceNumber;
                 invoice.InvoiceDate = updateDto.InvoiceDate;
                 invoice.CompanyId = updateDto.CompanyId;
+                invoice.PaymentTypeId = updateDto.PaymentTypeId;
+                invoice.DoesNotAffectProfit = updateDto.DoesNotAffectProfit;
                 invoice.TotalAmount = 0;
                 invoice.TotalDiscount = 0;
                 invoice.TotalTaxAmount = 0;
@@ -274,6 +288,7 @@ namespace MyPos.Api.Controllers
             var invoices = await _context.PurchaseInvoices
                 .Include(i => i.Company)
                 .Include(i => i.PurchaseInvoiceItems)
+                .Include(i => i.PaymentType) // Added to include payment type data
                 .OrderByDescending(i => i.InvoiceDate)
                 .ToListAsync();
 
@@ -285,6 +300,8 @@ namespace MyPos.Api.Controllers
                 CompanyName = invoice.Company != null ? invoice.Company.Name : string.Empty,
                 TotalAmount = invoice.TotalAmount,
                 GrandTotal = invoice.GrandTotal,
+                PaymentTypeName = invoice.PaymentType != null ? invoice.PaymentType.Name : string.Empty,
+                DoesNotAffectProfit = invoice.DoesNotAffectProfit,
                 Items = invoice.PurchaseInvoiceItems.Select(item => new PurchaseInvoiceItemDetailsDto
                 {
                     ProductName = item.ProductName,

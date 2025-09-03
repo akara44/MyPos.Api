@@ -16,6 +16,7 @@ namespace MyPos.Domain.Entities
         public CashRegisterType CashRegisterType { get; set; }
 
         public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public ICollection<PurchaseInvoice> PurchaseInvoices { get; set; } = new List<PurchaseInvoice>();
     }
 
     public enum CashRegisterType
