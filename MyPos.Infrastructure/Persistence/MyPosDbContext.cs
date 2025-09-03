@@ -84,7 +84,7 @@ namespace MyPos.Infrastructure.Persistence
                 .WithMany(c => c.Payments)
                 .HasForeignKey(p => p.CustomerId)
                 .IsRequired(); // CustomerId'nin zorunlu olduğunu belirtiyoruz.
-
+            // Yeni eklenen ilişki: PurchaseInvoice ve PaymentType
             modelBuilder.Entity<PurchaseInvoice>()
              .HasOne(pi => pi.PaymentType)
              .WithMany(pt => pt.PurchaseInvoices)
