@@ -71,6 +71,8 @@ namespace MyPos.Application.Dtos
         public DateTime InvoiceDate { get; set; }
         public string CompanyName { get; set; } = string.Empty;
         public decimal GrandTotal { get; set; }
+        public string PaymentTypeName { get; set; }
+        public string PaymentTypeCashRegister { get; set; }
     }
 
     // Fatura listeleme ve filtreleme için kullanılan DTO
@@ -101,5 +103,10 @@ namespace MyPos.Application.Dtos
         public int Id { get; set; }
         public required string Name { get; set; }
         public CashRegisterType CashRegisterType { get; set; }
+    }
+    public class CompanyInvoicesResponseDto
+    {
+        public decimal TotalAmount { get; set; } // Toplam alışveriş
+        public List<PurchaseInvoiceListDto> Invoices { get; set; }
     }
 }
