@@ -295,62 +295,6 @@ namespace MyPos.Api.Controllers
                 return StatusCode(500, "Fatura silinirken hata oluştu: " + ex.Message);
             }
         }
-        [HttpGet("GetCompanyInvoices/{companyId}")]
-        public async Task<IActionResult> GetCompanyInvoices(int companyId, DateTime? startDate, DateTime? endDate)
-        {
-            var query = _context.PurchaseInvoices
-                .Include(x => x.Company)
-                .Include(x => x.PaymentType) // Ödeme tipini dahil et
-                .Where(x => x.CompanyId == companyId);
-
-            if (startDate.HasValue)
-                query = query.Where(x => x.InvoiceDate >= startDate.Value);
-
-            if (endDate.HasValue)
-                query = query.Where(x => x.InvoiceDate <= endDate.Value);
-
-            var invoices = await query
-                .Select(x => new PurchaseInvoiceListDto
-                {
-                    Id = x.Id,
-                    InvoiceNumber = x.InvoiceNumber,
-                    InvoiceDate = x.InvoiceDate,
-                    CompanyName = x.Company.Name,
-                    GrandTotal = x.GrandTotal,
-                    PaymentTypeName = x.PaymentType != null ? x.PaymentType.Name : string.Empty,
-                    PaymentTypeCashRegister = x.PaymentType != null ? x.PaymentType.CashRegisterType.ToString() : string.Empty
-                })
-                .ToListAsync();
-
-            var totalAmount = invoices.Sum(i => i.GrandTotal);
-
-            // Kasa türüne göre gruplama
-            var totalsByCashRegister = invoices
-                .GroupBy(i => i.PaymentTypeCashRegister)
-                .ToDictionary(g => g.Key, g => g.Sum(i => i.GrandTotal));
-
-            // Tüm kasa türlerini ekle, eksik olanları 0 olarak ata
-            var allCashRegisters = Enum.GetValues(typeof(CashRegisterType))
-                .Cast<CashRegisterType>()
-                .Select(c => c.ToString());
-
-            foreach (var cashRegister in allCashRegisters)
-            {
-                if (!totalsByCashRegister.ContainsKey(cashRegister))
-                    totalsByCashRegister[cashRegister] = 0;
-            }
-
-            var response = new
-            {
-                TotalAmount = totalAmount,
-                TotalsByCashRegister = totalsByCashRegister,
-                Invoices = invoices
-            };
-
-            return Ok(response);
-        }
-
-
         [HttpGet("all")]
         public async Task<ActionResult<List<PurchaseInvoiceDetailsDto>>> GetAllPurchaseInvoices()
         {
