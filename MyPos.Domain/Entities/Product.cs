@@ -26,7 +26,7 @@ namespace MyPos.Domain.Entities
         public decimal PurchasePrice { get; set; }
 
         [NotMapped]
-        public decimal ProfitRate => (SalePrice - PurchasePrice) / PurchasePrice * 100;
+        public decimal ProfitRate => PurchasePrice == 0 ? 0 : (SalePrice - PurchasePrice) / PurchasePrice * 100;
 
         public int TaxRate { get; set; }
 

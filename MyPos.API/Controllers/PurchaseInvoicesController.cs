@@ -33,7 +33,6 @@ namespace MyPos.Api.Controllers
             if (!validationResult.IsValid)
                 return BadRequest(validationResult.Errors);
 
-            // Check if the payment type exists before creating the invoice
             var paymentType = await _context.PaymentTypes.FindAsync(createDto.PaymentTypeId);
             if (paymentType == null)
                 return BadRequest($"Ödeme tipi bulunamadı: {createDto.PaymentTypeId}");
@@ -63,7 +62,20 @@ namespace MyPos.Api.Controllers
                     if (product == null)
                         return BadRequest($"Ürün bulunamadı: {itemDto.ProductId}");
 
-                    var itemTotalPrice = itemDto.Quantity * itemDto.UnitPrice;
+                    // --- BURADA KURALIMIZ DEVREYE GİRİYOR ---
+                    decimal unitPriceToUse = itemDto.UnitPrice;
+
+                    if (unitPriceToUse <= 0) // Eğer gönderilen fiyat 0 veya boş ise
+                    {
+                        unitPriceToUse = product.PurchasePrice;
+                    }
+                    else // Eğer dolu gelirse
+                    {
+                        product.PurchasePrice = unitPriceToUse; // Ürün alış fiyatını güncelle
+                    }
+                    // --------------------------------------
+
+                    var itemTotalPrice = itemDto.Quantity * unitPriceToUse;
                     var discountAmount1 = itemTotalPrice * (itemDto.DiscountRate1 ?? 0) / 100;
                     var priceAfterFirstDiscount = itemTotalPrice - discountAmount1;
                     var discountAmount2 = priceAfterFirstDiscount * (itemDto.DiscountRate2 ?? 0) / 100;
@@ -78,7 +90,7 @@ namespace MyPos.Api.Controllers
                         Barcode = product.Barcode,
                         ProductName = product.Name,
                         Quantity = itemDto.Quantity,
-                        UnitPrice = itemDto.UnitPrice,
+                        UnitPrice = unitPriceToUse,
                         TotalPrice = itemTotalPrice,
                         TaxRate = itemDto.TaxRate,
                         TaxAmount = itemTaxAmount,
@@ -89,6 +101,7 @@ namespace MyPos.Api.Controllers
 
                     _context.PurchaseInvoiceItems.Add(newItem);
 
+                    // stok güncelle
                     product.Stock += itemDto.Quantity;
 
                     _context.StockTransaction.Add(new StockTransaction
@@ -118,6 +131,7 @@ namespace MyPos.Api.Controllers
                 return StatusCode(500, "Bir hata oluştu: " + ex.Message);
             }
         }
+
 
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdatePurchaseInvoice(int id, [FromBody] UpdatePurchaseInvoiceDto updateDto)
