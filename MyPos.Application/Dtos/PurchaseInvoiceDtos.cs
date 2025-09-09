@@ -73,6 +73,7 @@ namespace MyPos.Application.Dtos
         public decimal GrandTotal { get; set; }
         public string PaymentTypeName { get; set; }
         public string PaymentTypeCashRegister { get; set; }
+        public int TotalQuantity { get; set; }
     }
 
     // Fatura listeleme ve filtreleme için kullanılan DTO

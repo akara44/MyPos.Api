@@ -40,7 +40,8 @@ namespace MyPos.Api.Controllers
                     CompanyName = x.Company.Name,
                     GrandTotal = x.GrandTotal,
                     PaymentTypeName = x.PaymentType != null ? x.PaymentType.Name : string.Empty,
-                    PaymentTypeCashRegister = x.PaymentType != null ? x.PaymentType.CashRegisterType.ToString() : string.Empty
+                    PaymentTypeCashRegister = x.PaymentType != null ? x.PaymentType.CashRegisterType.ToString() : string.Empty,
+                    TotalQuantity = x.PurchaseInvoiceItems.Sum(i => i.Quantity)
                 })
                 .ToListAsync();
 
