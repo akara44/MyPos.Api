@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyPos.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using MyPos.Infrastructure.Persistence;
 namespace MyPos.Infrastructure.Migrations
 {
     [DbContext(typeof(MyPosDbContext))]
-    partial class MyPosDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250909095226_AddCompanyTransactionsTable")]
+    partial class AddCompanyTransactionsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -224,6 +227,9 @@ namespace MyPos.Infrastructure.Migrations
                     b.Property<int?>("PaymentTypeId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PurchaseInvoiceId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("TransactionDate")
                         .HasColumnType("datetime2");
 
@@ -235,6 +241,8 @@ namespace MyPos.Infrastructure.Migrations
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("PaymentTypeId");
+
+                    b.HasIndex("PurchaseInvoiceId");
 
                     b.ToTable("CompanyTransactions");
                 });
@@ -996,9 +1004,15 @@ namespace MyPos.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("PaymentTypeId");
 
+                    b.HasOne("MyPos.Domain.Entities.PurchaseInvoice", "PurchaseInvoice")
+                        .WithMany()
+                        .HasForeignKey("PurchaseInvoiceId");
+
                     b.Navigation("Company");
 
                     b.Navigation("PaymentType");
+
+                    b.Navigation("PurchaseInvoice");
                 });
 
             modelBuilder.Entity("MyPos.Domain.Entities.Product", b =>
