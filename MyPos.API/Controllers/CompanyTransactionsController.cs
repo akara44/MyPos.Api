@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos;
 using MyPos.Domain.Entities;
@@ -8,6 +9,7 @@ namespace MyPos.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    //[Authorize]  
     public class CompanyTransactionsController : ControllerBase
     {
         private readonly MyPosDbContext _context;
@@ -49,63 +51,46 @@ namespace MyPos.Api.Controllers
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate)
         {
-            // Tüm işlemleri tarihe göre sıralı bir şekilde alıyoruz
+            // Tüm işlemleri tarihe göre artan sıralı (eski tarihten yeniye) şekilde alıyoruz
             var transactions = await _context.CompanyTransactions
                 .Include(ct => ct.PaymentType)
                 .Where(ct => ct.CompanyId == companyId)
                 .OrderBy(ct => ct.TransactionDate)
                 .ToListAsync();
 
-            var currentBalance = 0m;
+            var runningBalance = 0m;
             var transactionList = new List<CompanyTransactionListDto>();
 
-            // Tüm borç ve ödemeleri toplayarak mevcut borcu hesapla
+            // İşlemleri sırayla işleyerek her bir işlemden sonraki kalan borcu hesapla
             foreach (var t in transactions)
             {
                 if (t.Type == TransactionType.Debt)
                 {
-                    currentBalance += t.Amount;
+                    runningBalance += t.Amount;
                 }
                 else if (t.Type == TransactionType.Payment)
                 {
-                    currentBalance -= t.Amount;
+                    runningBalance -= t.Amount;
+                }
+
+                // Sadece filtreleme kriterlerine uyanları listeye ekle
+                if ((!startDate.HasValue || t.TransactionDate >= startDate.Value) && (!endDate.HasValue || t.TransactionDate <= endDate.Value))
+                {
+                    transactionList.Add(new CompanyTransactionListDto
+                    {
+                        Id = t.Id,
+                        Type = t.Type,
+                        Amount = t.Amount,
+                        TransactionDate = t.TransactionDate,
+                        Description = t.Description,
+                        PaymentTypeName = t.PaymentType?.Name,
+                        RemainingDebt = runningBalance // Bu işlemden sonraki kalan borç
+                    });
                 }
             }
 
-            // Listeyi tersine çevirerek en son işlemi en üstte göster ve her işlemden sonraki kalan borcu hesapla
-            foreach (var t in transactions.OrderByDescending(x => x.TransactionDate).ToList())
-            {
-                var remainingDebt = currentBalance;
-
-                // Her bir işlemin kalan borcunu hesapla
-                // Bu işlem şu anki kalan borçtan çıkarılan/eklenen işlem olduğu için ters mantıkta ilerliyoruz.
-                if (t.Type == TransactionType.Debt)
-                {
-                    currentBalance -= t.Amount;
-                }
-                else if (t.Type == TransactionType.Payment)
-                {
-                    currentBalance += t.Amount;
-                }
-
-                if ((startDate.HasValue && t.TransactionDate < startDate.Value) || (endDate.HasValue && t.TransactionDate > endDate.Value))
-                {
-                    continue; // Filtre dışı kalanları atla
-                }
-
-                transactionList.Add(new CompanyTransactionListDto
-                {
-                    Id = t.Id,
-                    Type = t.Type,
-                    Amount = t.Amount,
-                    TransactionDate = t.TransactionDate,
-                    Description = t.Description,
-                    PaymentTypeName = t.PaymentType?.Name,
-                    RemainingDebt = remainingDebt
-                });
-            }
-
-            return Ok(transactionList);
+            // En son yapılan işlemleri en üstte göstermek için listeyi tersine çevir
+            return Ok(transactionList.OrderByDescending(t => t.TransactionDate));
         }
 
         [HttpGet("Summary/{companyId}")]
