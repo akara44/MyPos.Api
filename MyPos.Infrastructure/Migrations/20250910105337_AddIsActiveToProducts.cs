@@ -12,7 +12,7 @@ namespace MyPos.Infrastructure.Migrations
         {
             migrationBuilder.AddColumn<bool>(
                 name: "IsActive",
-                table: "Products",z
+                table: "Products",
                 type: "bit",
                 nullable: false,
                 defaultValue: false);
