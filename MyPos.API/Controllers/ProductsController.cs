@@ -302,7 +302,7 @@ namespace MyPos.Api.Controllers
                 TaxRate = product.TaxRate,
                 ProductGroupId = product.ProductGroupId,
                 ProductGroupName = product.ProductGroup.Name,
-                IsActive = product.IsActive // Eklendi
+                IsActive = product.IsActive
             });
         }
     }

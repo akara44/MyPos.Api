@@ -6,7 +6,8 @@ using MyPos.Infrastructure.Persistence;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using MyPos.Application.Dtos.Company; // Dictionary için
+using MyPos.Application.Dtos.Company;
+using System.Reflection.Metadata.Ecma335; // Dictionary için
 
 namespace MyPos.Api.Controllers
 {
@@ -173,6 +174,73 @@ namespace MyPos.Api.Controllers
             };
 
             return Ok(response);
+        }
+        [HttpGet("ApproachingPayments")]
+        public async Task<ActionResult<IEnumerable<ApproachingPaymentDto>>> GetApproachingPayments()
+        {
+            // Yalnızca manuel olarak girilen borç işlemlerini ve ilgili firmalarını çekiyoruz
+            var debtTransactions = await _context.CompanyTransactions
+                .Include(ct => ct.Company)
+                .Where(ct => ct.Type == TransactionType.Debt)
+                .ToListAsync();
+
+            var approachingPayments = new List<ApproachingPaymentDto>();
+
+            foreach (var transaction in debtTransactions)
+            {
+                // Firmanın TermDays alanı boş veya sıfırsa bu işlemi atla
+                if (!transaction.Company.TermDays.HasValue || transaction.Company.TermDays.Value <= 0)
+                {
+                    continue;
+                }
+
+                // Vade tarihini, borcun girildiği tarihe TermDays ekleyerek hesapla
+                var paymentDueDate = transaction.TransactionDate.AddDays(transaction.Company.TermDays.Value);
+
+                // Vade yaklaşmış mı diye kontrol et (örnek: bugünden 30 gün sonrasına kadar)
+                var daysUntilDue = (int)(paymentDueDate.Date - DateTime.Today).TotalDays;
+
+                if (daysUntilDue >= 0 && daysUntilDue <= 30)
+                {
+                    // Bu firmanın güncel kalan borcunu hesapla
+                    var totalDebt = await _context.CompanyTransactions
+                        .Where(ct => ct.CompanyId == transaction.CompanyId && ct.Type == TransactionType.Debt)
+                        .SumAsync(ct => ct.Amount);
+
+                    var totalPayments = await _context.CompanyTransactions
+                        .Where(ct => ct.CompanyId == transaction.CompanyId && ct.Type == TransactionType.Payment)
+                        .SumAsync(ct => ct.Amount);
+
+                    var remainingDebt = totalDebt - totalPayments;
+
+                    // Eğer kalan borç hala sıfırdan büyükse listeye ekle
+                    if (remainingDebt > 0)
+                    {
+                        approachingPayments.Add(new ApproachingPaymentDto
+                        {
+                            PaymentDueDate = paymentDueDate,
+                            CompanyName = transaction.Company.Name,
+                            RemainingDebt = remainingDebt,
+                            DaysUntilDue = daysUntilDue // Kalan gün sayısını ekliyoruz
+                        });
+                    }
+                }
+            }
+
+            // Aynı firmanın birden fazla borç işlemi olabilir, bu yüzden benzersiz hale getirip son halini alalım
+            var finalApproachingPayments = approachingPayments
+                .GroupBy(p => p.CompanyName)
+                .Select(g => new ApproachingPaymentDto
+                {
+                    PaymentDueDate = g.Min(p => p.PaymentDueDate),
+                    CompanyName = g.Key,
+                    RemainingDebt = g.First().RemainingDebt,
+                    DaysUntilDue = (int)(g.Min(p => p.PaymentDueDate).Date - DateTime.Today).TotalDays
+                })
+                .OrderBy(p => p.PaymentDueDate)
+                .ToList();
+
+            return Ok(finalApproachingPayments);
         }
     }
 }
