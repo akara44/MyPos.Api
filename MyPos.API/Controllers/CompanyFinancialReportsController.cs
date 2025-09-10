@@ -4,6 +4,7 @@ using MyPos.Application.Dtos;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace MyPos.Api.Controllers
 {
@@ -26,6 +27,8 @@ namespace MyPos.Api.Controllers
         {
             // 1. Alış faturalarını çek ve ortak DTO'ya dönüştür
             var invoices = await _context.PurchaseInvoices
+                .Include(pi => pi.PaymentType) // PaymentType'ı dahil et
+                .Include(pi => pi.PurchaseInvoiceItems) // Toplam Ürün için Item'ları dahil et
                 .Where(pi => pi.CompanyId == companyId)
                 .Select(pi => new CompanyFinancialTransactionDto
                 {
@@ -34,7 +37,9 @@ namespace MyPos.Api.Controllers
                     Description = $"Fatura No: {pi.InvoiceNumber}",
                     Type = "Alış Faturası",
                     Amount = pi.GrandTotal,
-                    RemainingDebt = 0
+                    RemainingDebt = 0, // Geçici değer
+                    PaymentTypeName = pi.PaymentType != null ? pi.PaymentType.Name : null, // Ödeme Tipi
+                    TotalQuantity = pi.PurchaseInvoiceItems.Sum(item => item.Quantity) // Toplam Ürün
                 })
                 .ToListAsync();
 
@@ -49,7 +54,9 @@ namespace MyPos.Api.Controllers
                     Description = ct.Description ?? (ct.Type == TransactionType.Payment ? "Ödeme" : "Borç"),
                     Type = ct.Type == TransactionType.Debt ? "Borç" : $"Ödeme - {ct.PaymentType.Name}",
                     Amount = ct.Amount,
-                    RemainingDebt = 0
+                    RemainingDebt = 0, // Geçici değer
+                    PaymentTypeName = ct.PaymentType != null ? ct.PaymentType.Name : null, // Ödeme için de PaymentType
+                    TotalQuantity = null // Borç/ödeme için Toplam Ürün yok
                 })
                 .ToListAsync();
 
@@ -57,22 +64,25 @@ namespace MyPos.Api.Controllers
             var combinedList = invoices
                 .Concat(transactions)
                 .OrderBy(x => x.TransactionDate)
-                .ThenBy(x => x.Type)
+                .ThenBy(x => x.Type) // Aynı tarihli işlemlerde önce faturaları/borçları göstermek için
                 .ToList();
 
             // 4. Her işlemden sonraki kalan borcu hesapla
             var runningBalance = 0m;
             foreach (var item in combinedList)
             {
-                if (item.Type == "Alış Faturası" || item.Type == "Borç")
+                // Sadece "Borç" ve "Ödeme" tipleri runningBalance'ı etkileyecek.
+                if (item.Type == "Borç")
                 {
                     runningBalance += item.Amount;
                 }
-                else
+                else if (item.Type.StartsWith("Ödeme")) // "Ödeme - Kasa", "Ödeme - Pos" gibi tipler için
                 {
                     runningBalance -= item.Amount;
                 }
+                // "Alış Faturası" tipi runningBalance'ı doğrudan etkilemeyecek.
 
+                // Tüm işlemler için o anki runningBalance değerini ata
                 item.RemainingDebt = runningBalance;
             }
 

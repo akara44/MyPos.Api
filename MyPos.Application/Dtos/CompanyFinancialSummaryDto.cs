@@ -6,4 +6,4 @@
         public decimal TotalPayments { get; set; }
         public decimal RemainingDebt { get; set; }
     }
-}
+}           

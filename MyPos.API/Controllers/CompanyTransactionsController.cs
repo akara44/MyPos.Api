@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
+using System.Linq; // Added for .ToList() and .Concat()
+using System.Threading.Tasks; // Added for async/await
 
 namespace MyPos.Api.Controllers
 {
@@ -51,7 +53,7 @@ namespace MyPos.Api.Controllers
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate)
         {
-            // Tüm işlemleri tarihe göre artan sıralı (eski tarihten yeniye) şekilde alıyoruz
+            // Yalnızca Borç ve Ödeme işlemlerini tarihe göre artan sıralı (eski tarihten yeniye) şekilde alıyoruz
             var transactions = await _context.CompanyTransactions
                 .Include(ct => ct.PaymentType)
                 .Where(ct => ct.CompanyId == companyId)
@@ -64,6 +66,7 @@ namespace MyPos.Api.Controllers
             // İşlemleri sırayla işleyerek her bir işlemden sonraki kalan borcu hesapla
             foreach (var t in transactions)
             {
+                // Sadece manuel borç ve ödeme işlemlerini kalan borç hesaplamasına dahil et
                 if (t.Type == TransactionType.Debt)
                 {
                     runningBalance += t.Amount;
@@ -84,7 +87,7 @@ namespace MyPos.Api.Controllers
                         TransactionDate = t.TransactionDate,
                         Description = t.Description,
                         PaymentTypeName = t.PaymentType?.Name,
-                        RemainingDebt = runningBalance // Bu işlemden sonraki kalan borç
+                        RemainingDebt = runningBalance // Bu işlemden sonraki kalan borç (sadece manuel işlemlerle hesaplanmış)
                     });
                 }
             }
