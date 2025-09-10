@@ -3,9 +3,10 @@ using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using MyPos.Application.Dtos;
-using MyPos.Application.DTOs;
-using MyPos.Application.Validators;
+using MyPos.Application.Dtos.Company;
+using MyPos.Application.Dtos.Product;
+using MyPos.Application.Validators.Auth;
+using MyPos.Application.Validators.Products;
 using MyPos.Infrastructure.Persistence;
 using System.Text;
 

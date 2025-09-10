@@ -2,8 +2,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using MyPos.Application.Dtos;
-using MyPos.Domain.Entities;    
+using MyPos.Application.Dtos.Auth;
+using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;

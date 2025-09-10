@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.Dtos;
-using MyPos.Application.Validators;
+using MyPos.Application.Dtos.PaymentType;
+using MyPos.Application.Validators.PaymentType;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 

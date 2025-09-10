@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.Dtos;
+using MyPos.Application.Dtos.Customers;
 using MyPos.Infrastructure.Persistence;
 using System.Collections.Generic;
 using System.Linq;

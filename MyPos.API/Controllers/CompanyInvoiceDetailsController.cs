@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.Dtos;
+using MyPos.Application.Dtos.PurchaseInvoice;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 

@@ -5,7 +5,8 @@ using MyPos.Domain.Entities; // CashRegisterType için
 using MyPos.Infrastructure.Persistence;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Collections.Generic; // Dictionary için
+using System.Collections.Generic;
+using MyPos.Application.Dtos.Company; // Dictionary için
 
 namespace MyPos.Api.Controllers
 {

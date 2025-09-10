@@ -2,10 +2,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Infrastructure.Persistence;
-using MyPos.Application.Dtos;
 using MyPos.Domain.Entities;
 using MyPos.Application.Validators;
 using Microsoft.AspNetCore.Authorization;
+using MyPos.Application.Dtos.Product;
 
 namespace MyPos.Api.Controllers
 {

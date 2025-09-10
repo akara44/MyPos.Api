@@ -2,12 +2,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.DTOs; 
-using MyPos.Application.Validators; 
-using MyPos.Domain.Entities; 
+using MyPos.Application.Dtos.Company;
+using MyPos.Application.Validators.Auth;
+using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 using System;
-using System.Threading.Tasks; 
+using System.Threading.Tasks;
 
 namespace MyPos.WebApi.Controllers
 {
