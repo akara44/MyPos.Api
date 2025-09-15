@@ -175,10 +175,12 @@ namespace MyPos.Api.Controllers
 
             return Ok(response);
         }
+        // CompanyTransactionsController.cs
+
         [HttpGet("ApproachingPayments")]
         public async Task<ActionResult<IEnumerable<ApproachingPaymentDto>>> GetApproachingPayments()
         {
-            // Yalnızca manuel olarak girilen borç işlemlerini ve ilgili firmalarını çekiyoruz
+            // Sadece borç işlemlerini ve ilgili firmalarını çekiyoruz
             var debtTransactions = await _context.CompanyTransactions
                 .Include(ct => ct.Company)
                 .Where(ct => ct.Type == TransactionType.Debt)
@@ -197,50 +199,42 @@ namespace MyPos.Api.Controllers
                 // Vade tarihini, borcun girildiği tarihe TermDays ekleyerek hesapla
                 var paymentDueDate = transaction.TransactionDate.AddDays(transaction.Company.TermDays.Value);
 
-                // Vade yaklaşmış mı diye kontrol et (örnek: bugünden 30 gün sonrasına kadar)
+                // Vadeye kalan gün sayısını hesapla (pozitif: kalan, negatif: geçen)
                 var daysUntilDue = (int)(paymentDueDate.Date - DateTime.Today).TotalDays;
 
-                if (daysUntilDue >= 0 && daysUntilDue <= 30)
+                // Vadesi gelen veya yaklaşanları (örnek: son 30 gün içinde) listeye alıyoruz
+                if (daysUntilDue <= 30)
                 {
-                    // Bu firmanın güncel kalan borcunu hesapla
-                    var totalDebt = await _context.CompanyTransactions
+                    // Bu firmanın güncel toplam kalan borcunu hesapla
+                    var totalDebtForCompany = await _context.CompanyTransactions
                         .Where(ct => ct.CompanyId == transaction.CompanyId && ct.Type == TransactionType.Debt)
                         .SumAsync(ct => ct.Amount);
 
-                    var totalPayments = await _context.CompanyTransactions
+                    var totalPaymentsForCompany = await _context.CompanyTransactions
                         .Where(ct => ct.CompanyId == transaction.CompanyId && ct.Type == TransactionType.Payment)
                         .SumAsync(ct => ct.Amount);
 
-                    var remainingDebt = totalDebt - totalPayments;
+                    var companyRemainingDebt = totalDebtForCompany - totalPaymentsForCompany;
 
                     // Eğer kalan borç hala sıfırdan büyükse listeye ekle
-                    if (remainingDebt > 0)
+                    if (companyRemainingDebt > 0)
                     {
                         approachingPayments.Add(new ApproachingPaymentDto
                         {
                             PaymentDueDate = paymentDueDate,
                             CompanyName = transaction.Company.Name,
-                            RemainingDebt = remainingDebt,
+                            TotalRemainingDebt = companyRemainingDebt,
+                            Description = transaction.Description ?? "Elle girilen borç",
+                            TransactionAmount = transaction.Amount,
+                            TransactionDate = transaction.TransactionDate,
                             DaysUntilDue = daysUntilDue // Kalan gün sayısını ekliyoruz
                         });
                     }
                 }
             }
 
-            // Aynı firmanın birden fazla borç işlemi olabilir, bu yüzden benzersiz hale getirip son halini alalım
-            var finalApproachingPayments = approachingPayments
-                .GroupBy(p => p.CompanyName)
-                .Select(g => new ApproachingPaymentDto
-                {
-                    PaymentDueDate = g.Min(p => p.PaymentDueDate),
-                    CompanyName = g.Key,
-                    RemainingDebt = g.First().RemainingDebt,
-                    DaysUntilDue = (int)(g.Min(p => p.PaymentDueDate).Date - DateTime.Today).TotalDays
-                })
-                .OrderBy(p => p.PaymentDueDate)
-                .ToList();
-
-            return Ok(finalApproachingPayments);
+            // İşlem bazlı listeyi ödeme tarihine göre en yakından en uzağa doğru sırala
+            return Ok(approachingPayments.OrderBy(p => p.PaymentDueDate));
         }
     }
 }
