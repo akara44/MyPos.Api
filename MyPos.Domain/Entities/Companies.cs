@@ -31,6 +31,8 @@ namespace MyPos.Domain.Entities
         [StringLength(50)]
         public string TaxNumber { get; set; } = string.Empty;
 
-        public DateTime CreatedDate { get; set; } 
+        public DateTime CreatedDate { get; set; }
+
+        public string UserId { get; set; }
     }
 }

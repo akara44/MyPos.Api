@@ -20,4 +20,5 @@ public class SaleMiscellaneous
 
     // Navigasyon Özelliği
     public virtual Sale Sale { get; set; }
+    public string UserId { get; set; }
 }

@@ -47,5 +47,6 @@ namespace MyPos.Domain.Entities
         // Yeni eklenen: Bu ürüne ait varyantlar
         public ICollection<ProductVariant> ProductVariants { get; set; } = new List<ProductVariant>();
         public bool IsActive { get; set; } = true;
+        public string UserId { get; set; }
     }
 }

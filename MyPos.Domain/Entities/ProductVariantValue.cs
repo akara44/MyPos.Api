@@ -17,5 +17,6 @@ namespace MyPos.Domain.Entities
         public int VariantValueId { get; set; }
         [ForeignKey("VariantValueId")]
         public VariantValue VariantValue { get; set; } = null!; // Zorunlu ilişki
+        public string UserId { get; set; }
     }
 }

@@ -29,5 +29,6 @@ namespace MyPos.Domain.Entities
         public decimal GrandTotal { get; set; }
 
         public ICollection<PurchaseInvoiceItem> PurchaseInvoiceItems { get; set; } = new List<PurchaseInvoiceItem>();
+        public string UserId { get; set; }
     }
 }

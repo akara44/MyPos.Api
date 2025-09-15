@@ -43,4 +43,5 @@ public class Sale
     public virtual Customer Customer { get; set; }
     public virtual ICollection<SaleItem> SaleItems { get; set; }
     public virtual ICollection<SaleMiscellaneous> SaleMiscellaneous { get; set; }
+    public string UserId { get; set; }
 }

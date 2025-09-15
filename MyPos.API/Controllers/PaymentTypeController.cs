@@ -5,12 +5,13 @@ using MyPos.Application.Dtos.PaymentType;
 using MyPos.Application.Validators.PaymentType;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
+using System.Security.Claims; // Bu using'i ekle
 
 namespace MyPos.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    //[Authorize]
+    [Authorize] // Auth'u aç ve tüm controller için geçerli kıl
     public class PaymentTypesController : ControllerBase
     {
         private readonly MyPosDbContext _context;
@@ -26,13 +27,21 @@ namespace MyPos.API.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<PaymentTypeDto>>> GetPaymentTypes()
         {
-            var paymentTypes = await _context.PaymentTypes.ToListAsync();
+            // JWT'den mevcut kullanıcının ID'sini al
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Sadece mevcut kullanıcıya ait verileri getir
+            var paymentTypes = await _context.PaymentTypes
+                                             .Where(p => p.UserId == currentUserId)
+                                             .ToListAsync();
+
             var paymentTypeDtos = paymentTypes.Select(p => new PaymentTypeDto
             {
                 Id = p.Id,
                 Name = p.Name,
                 CashRegisterType = p.CashRegisterType
             }).ToList();
+
             return Ok(paymentTypeDtos);
         }
 
@@ -40,7 +49,11 @@ namespace MyPos.API.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<PaymentTypeDto>> GetPaymentType(int id)
         {
-            var paymentType = await _context.PaymentTypes.FindAsync(id);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+            var paymentType = await _context.PaymentTypes
+                                             .FirstOrDefaultAsync(p => p.Id == id && p.UserId == currentUserId);
 
             if (paymentType == null)
             {
@@ -60,6 +73,8 @@ namespace MyPos.API.Controllers
         [HttpPost]
         public async Task<ActionResult<PaymentTypeDto>> CreatePaymentType(PaymentTypeDto paymentTypeDto)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var validationResult = await _validator.ValidateAsync(paymentTypeDto);
             if (!validationResult.IsValid)
             {
@@ -70,7 +85,8 @@ namespace MyPos.API.Controllers
             {
                 Name = paymentTypeDto.Name,
                 CashRegisterType = paymentTypeDto.CashRegisterType,
-                CreatedDate = DateTime.Now
+                CreatedDate = DateTime.Now,
+                UserId = currentUserId // Oluşturulan veriye kullanıcının ID'sini ekle
             };
 
             _context.PaymentTypes.Add(paymentType);
@@ -84,6 +100,8 @@ namespace MyPos.API.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdatePaymentType(int id, PaymentTypeDto paymentTypeDto)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             if (id != paymentTypeDto.Id)
             {
                 return BadRequest();
@@ -95,7 +113,10 @@ namespace MyPos.API.Controllers
                 return BadRequest(validationResult.Errors);
             }
 
-            var paymentTypeToUpdate = await _context.PaymentTypes.FindAsync(id);
+            // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+            var paymentTypeToUpdate = await _context.PaymentTypes
+                                                     .FirstOrDefaultAsync(p => p.Id == id && p.UserId == currentUserId);
+
             if (paymentTypeToUpdate == null)
             {
                 return NotFound();
@@ -110,7 +131,8 @@ namespace MyPos.API.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!PaymentTypeExists(id))
+                // Concurrency kontrolünde de UserId'yi kontrol et
+                if (!PaymentTypeExists(id, currentUserId))
                 {
                     return NotFound();
                 }
@@ -123,11 +145,16 @@ namespace MyPos.API.Controllers
             return NoContent();
         }
 
-        //  api/PaymentTypes/5
+        // api/PaymentTypes/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePaymentType(int id)
         {
-            var paymentType = await _context.PaymentTypes.FindAsync(id);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Veriyi silerken hem ID'yi hem de UserId'yi kontrol et
+            var paymentType = await _context.PaymentTypes
+                                             .FirstOrDefaultAsync(p => p.Id == id && p.UserId == currentUserId);
+
             if (paymentType == null)
             {
                 return NotFound();
@@ -139,9 +166,10 @@ namespace MyPos.API.Controllers
             return NoContent();
         }
 
-        private bool PaymentTypeExists(int id)
+        // Metodun UserId parametresi alacak şekilde güncellenmesi
+        private bool PaymentTypeExists(int id, string userId)
         {
-            return _context.PaymentTypes.Any(e => e.Id == id);
+            return _context.PaymentTypes.Any(e => e.Id == id && e.UserId == userId);
         }
     }
-}
+}   

@@ -28,4 +28,5 @@ public class Payment
 
     [ForeignKey("CustomerId")]
     public Customer Customer { get; set; }
+    public string UserId { get; set; }
 }

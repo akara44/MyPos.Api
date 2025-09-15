@@ -13,5 +13,6 @@ namespace MyPos.Domain.Entities
 
         // Bu varyant tipine ait değerler
         public ICollection<VariantValue>? VariantValues { get; set; }
+        public string UserId { get; set; }
     }
 }

@@ -36,5 +36,7 @@ namespace MyPos.Domain.Entities
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal? TotalDiscountAmount { get; set; }
+
+        public string UserId { get; set; }
     }
 }
