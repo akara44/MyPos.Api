@@ -5,12 +5,16 @@ using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos.Product;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
+using System.Linq;
+using System.Security.Claims; // Bu using'i ekle
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace MyPos.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    //[Authorize]
+    [Authorize] // Auth'u aç ve tüm controller için geçerli kıl
     public class VariantValuesController : ControllerBase
     {
         private readonly MyPosDbContext _context;
@@ -31,22 +35,34 @@ namespace MyPos.Api.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] int? variantTypeId = null)
         {
-            var query = _context.VariantValues.Include(vv => vv.VariantType).AsQueryable();
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var query = _context.VariantValues
+                .Include(vv => vv.VariantType)
+                .Where(vv => vv.UserId == currentUserId) // Sadece mevcut kullanıcıya ait olanları getir
+                .AsQueryable();
 
             if (variantTypeId.HasValue)
             {
+                // Belirli bir varyant tipine göre filtrelerken yetki kontrolü
+                var variantType = await _context.VariantTypes.FirstOrDefaultAsync(vt => vt.Id == variantTypeId.Value && vt.UserId == currentUserId);
+                if (variantType == null)
+                {
+                    return NotFound("Varyant tipi bulunamadı veya yetkiniz yok.");
+                }
                 query = query.Where(vv => vv.VariantTypeId == variantTypeId.Value);
             }
 
             var variantValues = await query
-                                            .Select(vv => new VariantValueResponseDto
-                                            {
-                                                Id = vv.Id,
-                                                Value = vv.Value,
-                                                VariantTypeId = vv.VariantTypeId,
-                                                VariantTypeName = vv.VariantType != null ? vv.VariantType.Name : string.Empty
-                                            })
-                                            .ToListAsync();
+                .Select(vv => new VariantValueResponseDto
+                {
+                    Id = vv.Id,
+                    Value = vv.Value,
+                    VariantTypeId = vv.VariantTypeId,
+                    VariantTypeName = vv.VariantType != null ? vv.VariantType.Name : string.Empty
+                })
+                .ToListAsync();
+
             return Ok(variantValues);
         }
 
@@ -54,10 +70,15 @@ namespace MyPos.Api.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
-            var variantValue = await _context.VariantValues.Include(vv => vv.VariantType).FirstOrDefaultAsync(vv => vv.Id == id);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var variantValue = await _context.VariantValues
+                .Include(vv => vv.VariantType)
+                .FirstOrDefaultAsync(vv => vv.Id == id && vv.UserId == currentUserId); // Yetki kontrolü
+
             if (variantValue == null)
             {
-                return NotFound();
+                return NotFound("Varyant değeri bulunamadı veya yetkiniz yok.");
             }
 
             var response = new VariantValueResponseDto
@@ -74,23 +95,27 @@ namespace MyPos.Api.Controllers
         [HttpPost]
         public async Task<ActionResult<VariantValueResponseDto>> Create([FromBody] CreateVariantValueDto dto)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var validationResult = await _createVariantValueValidator.ValidateAsync(dto);
             if (!validationResult.IsValid)
             {
                 return BadRequest(validationResult.Errors);
             }
 
-            // VariantType'ın varlığını kontrol edin
-            var variantType = await _context.VariantTypes.FindAsync(dto.VariantTypeId);
+            // VariantType'ın varlığını ve kullanıcıya ait olduğunu kontrol edin
+            var variantType = await _context.VariantTypes
+                .FirstOrDefaultAsync(vt => vt.Id == dto.VariantTypeId && vt.UserId == currentUserId);
             if (variantType == null)
             {
-                return BadRequest("Belirtilen varyant tipi bulunamadı.");
+                return BadRequest("Belirtilen varyant tipi bulunamadı veya yetkiniz yok.");
             }
 
             var variantValue = new VariantValue
             {
                 Value = dto.Value,
-                VariantTypeId = dto.VariantTypeId
+                VariantTypeId = dto.VariantTypeId,
+                UserId = currentUserId // Kullanıcının ID'sini ekle
             };
             _context.VariantValues.Add(variantValue);
             await _context.SaveChangesAsync();
@@ -109,6 +134,8 @@ namespace MyPos.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateVariantValueDto dto)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             if (id != dto.Id)
             {
                 return BadRequest("ID'ler eşleşmiyor.");
@@ -120,21 +147,25 @@ namespace MyPos.Api.Controllers
                 return BadRequest(validationResult.Errors);
             }
 
-            var variantValue = await _context.VariantValues.Include(vv => vv.VariantType).FirstOrDefaultAsync(vv => vv.Id == id);
+            // Varyant değerini ve bağlı olduğu tipi yetki kontrolüyle bul
+            var variantValue = await _context.VariantValues
+                .Include(vv => vv.VariantType)
+                .FirstOrDefaultAsync(vv => vv.Id == id && vv.UserId == currentUserId);
             if (variantValue == null)
             {
-                return NotFound();
+                return NotFound("Varyant değeri bulunamadı veya yetkiniz yok.");
             }
 
-            // VariantType'ın varlığını kontrol edin (eğer değişiyorsa)
+            // VariantType'ın varlığını ve kullanıcıya ait olduğunu kontrol edin (eğer değişiyorsa)
             if (variantValue.VariantTypeId != dto.VariantTypeId)
             {
-                var newVariantType = await _context.VariantTypes.FindAsync(dto.VariantTypeId);
+                var newVariantType = await _context.VariantTypes
+                    .FirstOrDefaultAsync(vt => vt.Id == dto.VariantTypeId && vt.UserId == currentUserId);
                 if (newVariantType == null)
                 {
-                    return BadRequest("Belirtilen yeni varyant tipi bulunamadı.");
+                    return BadRequest("Belirtilen yeni varyant tipi bulunamadı veya yetkiniz yok.");
                 }
-                variantValue.VariantType = newVariantType; // Navigasyon özelliğini güncelleyin
+                variantValue.VariantType = newVariantType;
             }
 
             variantValue.Value = dto.Value;
@@ -148,10 +179,15 @@ namespace MyPos.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var variantValue = await _context.VariantValues.FindAsync(id);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+            var variantValue = await _context.VariantValues
+                .FirstOrDefaultAsync(vv => vv.Id == id && vv.UserId == currentUserId);
+
             if (variantValue == null)
             {
-                return NotFound();
+                return NotFound("Varyant değeri bulunamadı veya yetkiniz yok.");
             }
 
             _context.VariantValues.Remove(variantValue);

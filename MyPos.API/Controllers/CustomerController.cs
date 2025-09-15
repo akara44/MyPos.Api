@@ -5,28 +5,30 @@ using MyPos.Application.Dtos.Customers;
 using MyPos.Infrastructure.Persistence;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims; // Bu using'i ekle
 using System.Threading.Tasks;
 
 [Route("api/[controller]")]
 [ApiController]
-//[Authorize]
+[Authorize] // Auth'u aç ve tüm controller için geçerli kıl
 public class CustomerController : ControllerBase
 {
-    // Veritabanı bağlamını (DbContext) kullanmak için bir alan tanımlıyoruz.
     private readonly MyPosDbContext _context;
 
-    
     public CustomerController(MyPosDbContext context)
     {
         _context = context;
     }
 
-    
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CustomerDto>>> GetCustomers()
     {
-        
-        var customers = await _context.Customers.ToListAsync();
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Sadece mevcut kullanıcıya ait müşterileri listele
+        var customers = await _context.Customers
+                                        .Where(c => c.UserId == currentUserId)
+                                        .ToListAsync();
 
         var customerDtos = customers.Select(c => new CustomerDto
         {
@@ -44,14 +46,18 @@ public class CustomerController : ControllerBase
         return Ok(customerDtos);
     }
 
-    
     [HttpGet("{id}")]
     public async Task<ActionResult<CustomerDto>> GetCustomer(int id)
     {
-        var customer = await _context.Customers.FindAsync(id);
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+        var customer = await _context.Customers
+                                        .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
         if (customer == null)
         {
-            return NotFound();
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
         var customerDto = new CustomerDto
@@ -70,10 +76,11 @@ public class CustomerController : ControllerBase
         return Ok(customerDto);
     }
 
-    
     [HttpPost]
     public async Task<ActionResult<CustomerDto>> CreateCustomer(CustomerDto customerDto)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var validator = new CustomerValidator();
         var customer = new Customer
         {
@@ -84,8 +91,9 @@ public class CustomerController : ControllerBase
             CustomerNote = customerDto.CustomerNote,
             OpenAccountLimit = customerDto.OpenAccountLimit,
             TaxOffice = customerDto.TaxOffice,
-            TaxNumber = customerDto.TaxNumber
-        };
+            TaxNumber = customerDto.TaxNumber,
+            UserId = currentUserId // Oluşturulan veriye kullanıcının ID'sini ekle
+        };
 
         var validationResult = validator.Validate(customer);
         if (!validationResult.IsValid)
@@ -94,29 +102,32 @@ public class CustomerController : ControllerBase
         }
 
         _context.Customers.Add(customer);
-        await _context.SaveChangesAsync(); // Değişiklikleri veritabanına kaydet.
+        await _context.SaveChangesAsync();
 
-        customerDto.Id = customer.Id; 
+        customerDto.Id = customer.Id;
 
         return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, customerDto);
     }
 
-    
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateCustomer(int id, CustomerDto customerDto)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         if (id != customerDto.Id)
         {
             return BadRequest("ID uyuşmuyor.");
         }
 
-        var existingCustomer = await _context.Customers.FindAsync(id);
+        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+        var existingCustomer = await _context.Customers
+                                                .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
         if (existingCustomer == null)
         {
-            return NotFound();
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        
         existingCustomer.CustomerName = customerDto.CustomerName;
         existingCustomer.DueDate = customerDto.DueDate;
         existingCustomer.Phone = customerDto.Phone;
@@ -139,9 +150,9 @@ public class CustomerController : ControllerBase
         }
         catch (DbUpdateConcurrencyException)
         {
-            if (!_context.Customers.Any(e => e.Id == id))
+            if (!_context.Customers.Any(e => e.Id == id && e.UserId == currentUserId))
             {
-                return NotFound();
+                return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
             }
             else
             {
@@ -152,42 +163,53 @@ public class CustomerController : ControllerBase
         return NoContent();
     }
 
-    
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCustomer(int id)
     {
-        var customer = await _context.Customers.FindAsync(id);
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+        var customer = await _context.Customers
+                                        .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
         if (customer == null)
         {
-            return NotFound();
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
         _context.Customers.Remove(customer);
-        await _context.SaveChangesAsync(); // Değişikliği veritabanına kaydet.
+        await _context.SaveChangesAsync();
 
         return NoContent();
     }
+
     [HttpGet("{id}/summary")]
     public async Task<ActionResult<CustomerSummaryDto>> GetCustomerSummary(int id)
     {
-        // Müşterinin varlığını kontrol et, yoksa NotFound dönsün.
-        var customerExists = await _context.Customers.AnyAsync(c => c.Id == id);
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Müşterinin varlığını ve yetkisini kontrol et
+        var customerExists = await _context.Customers
+                                            .AnyAsync(c => c.Id == id && c.UserId == currentUserId);
+
         if (!customerExists)
         {
-            return NotFound("Belirtilen müşteri bulunamadı.");
+            return NotFound("Belirtilen müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        // Müşterinin toplam satış tutarını hesapla
-        var totalSales = await _context.Orders
-            .Where(o => o.CustomerId == id)
-            .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
+        // Müşterinin toplam satış tutarını hesapla
+        // `Orders` tablosunda `UserId` filtresi olmadığını varsayarak,
+        // `Orders` ve `Payments` tablolarının `CustomerId` üzerinden `Customers` ile ilişkili olduğunu kullanacağız.
+        // Bu, dolaylı olarak yetkilendirme sağlar.
+        var totalSales = await _context.Orders
+      .Where(o => o.CustomerId == id)
+      .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
 
-        // Müşterinin toplam ödeme tutarını hesapla
-        var totalPayment = await _context.Payments
-            .Where(p => p.CustomerId == id)
-            .SumAsync(p => (decimal?)p.Amount) ?? 0;
+        // Müşterinin toplam ödeme tutarını hesapla
+        var totalPayment = await _context.Payments
+      .Where(p => p.CustomerId == id)
+      .SumAsync(p => (decimal?)p.Amount) ?? 0;
 
-        // Kalan bakiyeyi hesapla
         var remainingBalance = totalSales - totalPayment;
 
         var summaryDto = new CustomerSummaryDto
@@ -200,4 +222,3 @@ public class CustomerController : ControllerBase
         return Ok(summaryDto);
     }
 }
-

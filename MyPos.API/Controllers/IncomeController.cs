@@ -2,11 +2,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Infrastructure.Persistence;
+using System;
+using System.Linq;
+using System.Security.Claims; // Bu using'i ekle
 using System.Threading.Tasks;
 
 [Route("api/[controller]")]
 [ApiController]
-//[Authorize]
+[Authorize] // Auth'u aç ve tüm controller için geçerli kıl
 public class IncomeController : ControllerBase
 {
     private readonly MyPosDbContext _context;
@@ -19,6 +22,8 @@ public class IncomeController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddIncome([FromBody] TransactionDto dto)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var validator = new TransactionValidator();
         var result = validator.Validate(dto);
         if (!result.IsValid) return BadRequest(result.Errors);
@@ -32,7 +37,8 @@ public class IncomeController : ControllerBase
             Description = dto.Description,
             PaymentType = dto.PaymentType,
             TypeId = dto.TypeId,
-            Date = dto.Date
+            Date = dto.Date,
+            UserId = currentUserId // Kullanıcının ID'sini ekle
         };
 
         _context.Incomes.Add(income);
@@ -44,7 +50,11 @@ public class IncomeController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Sadece mevcut kullanıcıya ait gelirleri getir
         var incomes = await _context.Incomes
+            .Where(i => i.UserId == currentUserId)
             .Include(x => x.Type)
             .Select(x => new
             {
@@ -59,16 +69,21 @@ public class IncomeController : ControllerBase
         return Ok(incomes);
     }
 
-    //  Güncelleme
+    // Güncelleme
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateIncome(int id, [FromBody] TransactionDto dto)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var validator = new TransactionValidator();
         var result = validator.Validate(dto);
         if (!result.IsValid) return BadRequest(result.Errors);
 
-        var income = await _context.Incomes.FindAsync(id);
-        if (income == null) return NotFound(new { message = "Income not found." });
+        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+        var income = await _context.Incomes
+                                   .FirstOrDefaultAsync(i => i.Id == id && i.UserId == currentUserId);
+
+        if (income == null) return NotFound(new { message = "Income not found or you don't have permission." });
 
         income.Amount = dto.Amount;
         income.Description = dto.Description;
@@ -85,14 +100,20 @@ public class IncomeController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteIncome(int id)
     {
-        var income = await _context.Incomes.FindAsync(id);
-        if (income == null) return NotFound(new { message = "Income not found." });
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+        var income = await _context.Incomes
+                                   .FirstOrDefaultAsync(i => i.Id == id && i.UserId == currentUserId);
+
+        if (income == null) return NotFound(new { message = "Income not found or you don't have permission." });
 
         _context.Incomes.Remove(income);
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Income deleted successfully." });
     }
+
     [HttpGet("filtered-list")]
     public async Task<IActionResult> GetFilteredIncomes(
     [FromQuery] DateTime? startDate,
@@ -100,8 +121,11 @@ public class IncomeController : ControllerBase
     [FromQuery] string? paymentType,
     [FromQuery] int? typeId)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var query = _context.Incomes
-            .Include(x => x.Type) // Type bilgisini de çekmek için
+            .Where(i => i.UserId == currentUserId) // Kullanıcı ID'ye göre ilk filtreleme
+            .Include(x => x.Type)
             .AsQueryable();
 
         // Filtreleme mantığı aynı şekilde uygulanır
@@ -125,7 +149,6 @@ public class IncomeController : ControllerBase
             query = query.Where(i => i.TypeId == typeId.Value);
         }
 
-        // Filtrelenmiş gelir listesini al
         var filteredIncomes = await query.Select(x => new
         {
             x.Id,
@@ -138,32 +161,30 @@ public class IncomeController : ControllerBase
 
         return Ok(new
         {
-            //TotalIncome = totalIncome,
-            //CashTotal = cashTotal,
-            //PosTotal = posTotal,
-            Incomes = filteredIncomes // Filtrelenmiş listeyi de ekle
+            Incomes = filteredIncomes
         });
     }
+
     [HttpGet("total-income")]
     public async Task<IActionResult> GetTotalIncome()
     {
-        // Veritabanındaki tüm gelirleri çekiyoruz
-        var allIncomes = await _context.Incomes.ToListAsync();
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        // Toplam gelirleri hesaplıyoruz
+        // Sadece mevcut kullanıcıya ait gelirleri çekiyoruz
+        var allIncomes = await _context.Incomes
+                                       .Where(i => i.UserId == currentUserId)
+                                       .ToListAsync();
+
         var totalIncome = allIncomes.Sum(i => i.Amount);
 
-        // Nakit gelirlerin toplamını hesaplıyoruz
         var cashTotal = allIncomes
             .Where(i => i.PaymentType == "NAKİT")
             .Sum(i => i.Amount);
 
-        // POS gelirlerinin toplamını hesaplıyoruz (kredi kartı da dahil)
         var posTotal = allIncomes
             .Where(i => i.PaymentType == "POS" || i.PaymentType == "KREDİ KARTI")
             .Sum(i => i.Amount);
 
-        // Sonuçları tek bir nesne olarak döndürüyoruz
         var totals = new
         {
             TotalIncome = totalIncome,
@@ -173,27 +194,27 @@ public class IncomeController : ControllerBase
 
         return Ok(totals);
     }
+
     [HttpGet("income-by-type")]
     public async Task<IActionResult> GetIncomeByType()
     {
-        // Veritabanındaki tüm gelirleri tür bilgisiyle birlikte çekiyoruz
-        // .Include(i => i.Type) ile Income'a bağlı olan ExpenseIncomeType bilgisini de alıyoruz.
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Sadece mevcut kullanıcıya ait gelirleri tür bilgisiyle birlikte çekiyoruz
         var incomeData = await _context.Incomes
+            .Where(i => i.UserId == currentUserId)
             .Include(i => i.Type)
             .ToListAsync();
 
-        // Verileri gruplara ayırıp her grubun toplamını hesaplıyoruz
         var groupedData = incomeData
-            .GroupBy(i => i.Type.Name) // Gelir türünün adına göre gruplama yapıyoruz
+            .GroupBy(i => i.Type.Name)
             .Select(g => new
             {
-                Type = g.Key, // Grubun adı (örneğin: "Alacak", "Borç")
-                TotalAmount = g.Sum(i => i.Amount) // Bu gruba ait toplam miktar
+                Type = g.Key,
+                TotalAmount = g.Sum(i => i.Amount)
             })
             .ToList();
 
-        // Sonuçları JSON formatında döndürüyoruz
-        // Bu veri, frontend'de grafik çizmek için kullanılacak
         return Ok(groupedData);
     }
 }

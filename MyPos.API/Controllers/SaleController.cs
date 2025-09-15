@@ -4,12 +4,15 @@ using Microsoft.EntityFrameworkCore;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Migrations;
 using MyPos.Infrastructure.Persistence;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Security.Claims; // Bu using'i ekle
 using System.Threading.Tasks;
+
 [Route("api/[controller]")]
 [ApiController]
-//[Authorize]
+[Authorize] // Auth'u aç
 public class SaleController : ControllerBase
 {
     private readonly MyPosDbContext _context;
@@ -24,6 +27,8 @@ public class SaleController : ControllerBase
     [HttpPost("create")]
     public async Task<IActionResult> CreateSale([FromBody] CreateSaleRequestDto request)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var validationResult = _validator.Validate(request);
         if (!validationResult.IsValid)
             return BadRequest(new { errors = validationResult.Errors });
@@ -43,8 +48,13 @@ public class SaleController : ControllerBase
 
         var productIds = request.SaleItems.Select(x => x.ProductId).ToList();
         var products = await _context.Products
-            .Where(p => productIds.Contains(p.Id))
+            .Where(p => productIds.Contains(p.Id) && p.UserId == currentUserId) // Ürünleri kullanıcıya göre filtrele
             .ToDictionaryAsync(p => p.Id);
+
+        if (products.Count != productIds.Count)
+        {
+            return BadRequest("Satışa eklenen ürünlerden bazıları bulunamadı veya yetkiniz yok.");
+        }
 
         var sale = new Sale
         {
@@ -59,10 +69,9 @@ public class SaleController : ControllerBase
             IsDiscountApplied = false,
             SaleItems = new List<SaleItem>(),
             SaleMiscellaneous = new List<SaleMiscellaneous>(),
-
-            // 🔥 Yeni alanlar
             SaleCode = $"SAL-{DateTime.Now:yyyyMMddHHmmss}-{Guid.NewGuid().ToString().Substring(0, 6)}",
-            TotalQuantity = 0
+            TotalQuantity = 0,
+            UserId = currentUserId // Satışa kullanıcı ID'sini ekle
         };
 
         // Ürün kalemlerini ekle
@@ -85,15 +94,14 @@ public class SaleController : ControllerBase
             };
 
             sale.SubTotalAmount += saleItem.TotalPrice;
-            sale.TotalQuantity += itemDto.Quantity; // 🔥 ürün adedi eklendi
+            sale.TotalQuantity += itemDto.Quantity;
             sale.SaleItems.Add(saleItem);
         }
 
-        // İndirim uygula (varsa)
+        // ... (indirim ve muhtelif tutarları hesaplayan kısım aynı kalır)
         if (request.DiscountValue.HasValue && !string.IsNullOrEmpty(request.DiscountType))
         {
             decimal discountAmount = 0;
-
             if (request.DiscountType == "PERCENTAGE")
             {
                 discountAmount = sale.SubTotalAmount * (request.DiscountValue.Value / 100);
@@ -102,17 +110,14 @@ public class SaleController : ControllerBase
             {
                 if (request.DiscountValue.Value > sale.SubTotalAmount)
                     return BadRequest("İndirim tutarı, ara toplamdan fazla olamaz.");
-
                 discountAmount = request.DiscountValue.Value;
             }
-
             sale.DiscountType = request.DiscountType;
             sale.DiscountValue = request.DiscountValue.Value;
             sale.DiscountAmount = discountAmount;
             sale.IsDiscountApplied = true;
         }
 
-        // Muhtelif tutarları ekle (varsa)
         if (request.MiscellaneousItems != null && request.MiscellaneousItems.Any())
         {
             foreach (var miscItem in request.MiscellaneousItems)
@@ -123,42 +128,40 @@ public class SaleController : ControllerBase
                     Amount = miscItem.Amount,
                     CreatedDate = DateTime.Now
                 };
-
                 sale.SaleMiscellaneous.Add(saleMisc);
                 sale.MiscellaneousTotal += miscItem.Amount;
             }
         }
 
-        // Toplam tutarı hesapla
         sale.TotalAmount = sale.SubTotalAmount - sale.DiscountAmount + sale.MiscellaneousTotal;
 
         _context.Sales.Add(sale);
         await _context.SaveChangesAsync();
 
         return CreatedAtAction(nameof(GetSaleById), new { saleId = sale.SaleId },
-            await GetSaleDetailsDto(sale.SaleId));
+            await GetSaleDetailsDto(sale.SaleId, currentUserId)); // Pass currentUserId as the second argument
     }
 
-
-
-    // Mevcut endpoint'ler...
     [HttpGet("{saleId}")]
     public async Task<IActionResult> GetSaleById(int saleId)
     {
-        var saleDetailsDto = await GetSaleDetailsDto(saleId);
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var saleDetailsDto = await GetSaleDetailsDto(saleId, currentUserId); // Yetki kontrolü ekle
         if (saleDetailsDto == null)
-            return NotFound();
+            return NotFound("Satış bulunamadı veya yetkiniz yok.");
 
         return Ok(saleDetailsDto);
     }
 
-    private async Task<SaleDetailsDto?> GetSaleDetailsDto(int saleId)
+    // Private metot yetki kontrolü için güncellendi
+    private async Task<SaleDetailsDto?> GetSaleDetailsDto(int saleId, string userId)
     {
         var sale = await _context.Sales
             .Include(s => s.Customer)
             .Include(s => s.SaleItems)
             .Include(s => s.SaleMiscellaneous)
-            .FirstOrDefaultAsync(s => s.SaleId == saleId);
+            .FirstOrDefaultAsync(s => s.SaleId == saleId && s.UserId == userId); // Yetki kontrolü
 
         if (sale == null)
             return null;
@@ -203,10 +206,13 @@ public class SaleController : ControllerBase
     [HttpGet("all")]
     public async Task<IActionResult> GetAllSales()
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var sales = await _context.Sales
             .Include(s => s.Customer)
             .Include(s => s.SaleItems)
             .Include(s => s.SaleMiscellaneous)
+            .Where(s => s.UserId == currentUserId) // Sadece mevcut kullanıcıya ait satışları getir
             .ToListAsync();
 
         var salesDto = sales.Select(s => new SaleDetailsDto
@@ -248,33 +254,33 @@ public class SaleController : ControllerBase
         return Ok(salesDto);
     }
 
-    // Finalize endpoint'lerini de güncellememiz gerekiyor çünkü TotalAmount hesaplaması değişti
     [HttpPost("{saleId}/finalize")]
     public async Task<IActionResult> FinalizeSale(int saleId, [FromBody] FinalizeSaleRequestDto request)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
             var sale = await _context.Sales
                 .Include(s => s.SaleItems)
-                .FirstOrDefaultAsync(s => s.SaleId == saleId);
+                .FirstOrDefaultAsync(s => s.SaleId == saleId && s.UserId == currentUserId); // Satış yetki kontrolü
 
             if (sale == null)
-                return NotFound($"Satış ID'si {saleId} bulunamadı.");
+                return NotFound($"Satış ID'si {saleId} bulunamadı veya yetkiniz yok.");
 
             if (sale.IsCompleted)
                 return BadRequest("Bu satış zaten tamamlanmış.");
 
-            var paymentType = await _context.PaymentTypes.FindAsync(request.PaymentTypeId);
+            var paymentType = await _context.PaymentTypes.FirstOrDefaultAsync(pt => pt.Id == request.PaymentTypeId && pt.UserId == currentUserId);
             if (paymentType == null)
-                return BadRequest("Seçilen ödeme tipi bulunamadı.");
+                return BadRequest("Seçilen ödeme tipi bulunamadı veya yetkiniz yok.");
 
             sale.PaymentType = paymentType.Name;
 
-            // Tek query ile tüm ürünleri al
             var productIds = sale.SaleItems.Select(si => si.ProductId).ToList();
             var products = await _context.Products
-                .Where(p => productIds.Contains(p.Id))
+                .Where(p => productIds.Contains(p.Id) && p.UserId == currentUserId) // Ürün yetki kontrolü
                 .ToDictionaryAsync(p => p.Id);
 
             foreach (var saleItem in sale.SaleItems)
@@ -290,7 +296,8 @@ public class SaleController : ControllerBase
                     TransactionType = "OUT",
                     Reason = $"Sale:{saleId}",
                     Date = DateTime.Now,
-                    BalanceAfter = product.Stock
+                    BalanceAfter = product.Stock,
+                    UserId = currentUserId // Stok hareketine kullanıcı ID'sini ekle
                 });
             }
 
@@ -303,7 +310,7 @@ public class SaleController : ControllerBase
                 message = "Satış başarıyla tamamlandı.",
                 saleId = sale.SaleId,
                 paymentType = sale.PaymentType,
-                totalAmount = sale.TotalAmount // Güncellenmiş toplam tutar
+                totalAmount = sale.TotalAmount
             });
         }
         catch (Exception ex)
@@ -316,35 +323,40 @@ public class SaleController : ControllerBase
     [HttpPost("{saleId}/finalize-split")]
     public async Task<IActionResult> FinalizeSaleSplit(int saleId, [FromBody] SplitPaymentRequestDto request)
     {
-        var sale = await _context.Sales.FindAsync(saleId);
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var sale = await _context.Sales
+            .FirstOrDefaultAsync(s => s.SaleId == saleId && s.UserId == currentUserId); // Satış yetki kontrolü
         if (sale == null)
-            return NotFound("Satış bulunamadı.");
+            return NotFound("Satış bulunamadı veya yetkiniz yok.");
 
         if (sale.IsCompleted)
             return BadRequest("Satış zaten tamamlanmış.");
 
-        // Parçalı toplam kontrolü - TotalAmount kullanıyoruz (indirim ve muhtelif tutarlar dahil)
         var totalSplit = request.SplitPayments.Sum(x => x.Amount);
         if (totalSplit != sale.TotalAmount)
             return BadRequest($"Parçalı ödemelerin toplamı ({totalSplit}) satış tutarına ({sale.TotalAmount}) eşit değil.");
 
+        // Ödeme tiplerini tek sorguda al ve yetkiyi kontrol et
+        var paymentTypeIds = request.SplitPayments.Where(sp => sp.PaymentTypeId.HasValue).Select(sp => sp.PaymentTypeId.Value).ToList();
+        var paymentTypes = await _context.PaymentTypes
+                                         .Where(pt => paymentTypeIds.Contains(pt.Id) && pt.UserId == currentUserId)
+                                         .ToDictionaryAsync(pt => pt.Id);
+
         foreach (var sp in request.SplitPayments)
         {
             string paymentTypeName;
-            // Default yöntemler
             if (sp.PaymentTypeName == "Nakit" || sp.PaymentTypeName == "POS")
             {
                 paymentTypeName = sp.PaymentTypeName;
             }
             else
             {
-                // DB'den kontrol
                 if (sp.PaymentTypeId == null)
                     return BadRequest("DB ödeme tipi için PaymentTypeId boş olamaz.");
 
-                var paymentType = await _context.PaymentTypes.FindAsync(sp.PaymentTypeId.Value);
-                if (paymentType == null)
-                    return BadRequest($"Geçersiz ödeme tipi: {sp.PaymentTypeId}");
+                if (!paymentTypes.TryGetValue(sp.PaymentTypeId.Value, out var paymentType))
+                    return BadRequest($"Geçersiz ödeme tipi: {sp.PaymentTypeId} veya yetkiniz yok.");
 
                 paymentTypeName = paymentType.Name;
             }
@@ -355,7 +367,8 @@ public class SaleController : ControllerBase
                 CustomerId = sale.CustomerId ?? 0,
                 Amount = sp.Amount,
                 PaymentDate = DateTime.Now,
-                PaymentTypeName = paymentTypeName
+                PaymentTypeName = paymentTypeName,
+                UserId = currentUserId // Ödemeye kullanıcı ID'sini ekle
             });
         }
 
@@ -371,7 +384,7 @@ public class SaleController : ControllerBase
 }
 
 
-// DTO laı ayırmayı unutma ===!!!   
+// DTO laı ayırmayı unutma ===!!!    
 public class FinalizeSaleRequestDto
 {
     [Required]
@@ -385,7 +398,6 @@ public class SplitPaymentRequestDto
 public class SplitPaymentDto
 {
     public string PaymentTypeName { get; set; } // "Nakit", "POS" ya da DB’den gelen isim
-    public int? PaymentTypeId { get; set; }     // sadece DB’den gelenler için kullanılır
+    public int? PaymentTypeId { get; set; }      // sadece DB’den gelenler için kullanılır
     public decimal Amount { get; set; }
 }
- 

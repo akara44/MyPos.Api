@@ -8,13 +8,14 @@ using MyPos.Infrastructure.Persistence;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Claims; // Bu using'i ekle
 using System.Threading.Tasks;
 
 namespace MyPos.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    //[Authorize]
+    [Authorize] // Auth'u aç
     public class ProductVariantsController : ControllerBase
     {
         private readonly MyPosDbContext _context;
@@ -35,15 +36,24 @@ namespace MyPos.Api.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] int? productId = null)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var query = _context.ProductVariants
                 .Include(pv => pv.Product)
                 .Include(pv => pv.ProductVariantValues)
                     .ThenInclude(pvv => pvv.VariantValue)
                         .ThenInclude(vv => vv.VariantType)
+                .Where(pv => pv.Product.UserId == currentUserId) // Sadece kullanıcının ürünlerine ait varyantları getir
                 .AsQueryable();
 
             if (productId.HasValue)
             {
+                // Ek olarak, belirli bir ürüne ait varyantları filtrelerken de yetkiyi kontrol et
+                var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == productId.Value && p.UserId == currentUserId);
+                if (product == null)
+                {
+                    return NotFound("Ürün bulunamadı veya yetkiniz yok.");
+                }
                 query = query.Where(pv => pv.ProductId == productId.Value);
             }
 
@@ -82,16 +92,18 @@ namespace MyPos.Api.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var productVariant = await _context.ProductVariants
                 .Include(pv => pv.Product)
                 .Include(pv => pv.ProductVariantValues)
                     .ThenInclude(pvv => pvv.VariantValue)
                         .ThenInclude(vv => vv.VariantType)
-                .FirstOrDefaultAsync(pv => pv.Id == id);
+                .FirstOrDefaultAsync(pv => pv.Id == id && pv.Product.UserId == currentUserId); // Yetki kontrolü
 
             if (productVariant == null)
             {
-                return NotFound();
+                return NotFound("Varyant bulunamadı veya yetkiniz yok.");
             }
 
             var response = new ProductVariantResponseDto
@@ -126,28 +138,30 @@ namespace MyPos.Api.Controllers
         [HttpPost]
         public async Task<ActionResult<ProductVariantResponseDto>> Create([FromBody] CreateProductVariantDto dto)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var validationResult = await _createProductVariantValidator.ValidateAsync(dto);
             if (!validationResult.IsValid)
             {
                 return BadRequest(validationResult.Errors);
             }
 
-            // Ana ürünün varlığını kontrol edin
-            var product = await _context.Products.FindAsync(dto.ProductId);
+            // Ana ürünün varlığını ve kullanıcıya ait olduğunu kontrol edin
+            var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId && p.UserId == currentUserId);
             if (product == null)
             {
-                return BadRequest("Belirtilen ana ürün bulunamadı.");
+                return BadRequest("Belirtilen ana ürün bulunamadı veya yetkiniz yok.");
             }
 
-            // Varyant değerlerinin varlığını ve aynı VaryantType'tan sadece bir tane seçildiğini kontrol edin
+            // Varyant değerlerinin varlığını ve kullanıcıya ait olup olmadığını kontrol edin
             var variantValues = await _context.VariantValues
                 .Include(vv => vv.VariantType)
-                .Where(vv => dto.VariantValueIds.Contains(vv.Id))
+                .Where(vv => dto.VariantValueIds.Contains(vv.Id) && vv.UserId == currentUserId)
                 .ToListAsync();
 
             if (variantValues.Count != dto.VariantValueIds.Count)
             {
-                return BadRequest("Bazı varyant değerleri bulunamadı.");
+                return BadRequest("Bazı varyant değerleri bulunamadı veya yetkiniz yok.");
             }
 
             // Aynı varyant tipinden birden fazla değer seçilmediğini kontrol edin
@@ -161,9 +175,6 @@ namespace MyPos.Api.Controllers
                 return BadRequest("Aynı varyant tipinden birden fazla değer seçilemez.");
             }
 
-            // Eğer isterseniz, aynı varyant kombinasyonunun zaten var olup olmadığını kontrol edin
-            // Bu daha karmaşık bir sorgu gerektirir.
-
             var productVariant = new ProductVariant
             {
                 ProductId = dto.ProductId,
@@ -175,12 +186,12 @@ namespace MyPos.Api.Controllers
                 PurchasePrice = dto.PurchasePrice,
                 TaxRate = dto.TaxRate,
                 SalePageList = dto.SalePageList,
+                UserId = currentUserId // Kullanıcının ID'sini ekle
             };
 
             _context.ProductVariants.Add(productVariant);
-            await _context.SaveChangesAsync(); // ProductVariant'ın ID'si oluşması için kaydet
+            await _context.SaveChangesAsync();
 
-            // ProductVariantValue ilişkilerini oluştur
             foreach (var variantValue in variantValues)
             {
                 productVariant.ProductVariantValues.Add(new ProductVariantValue
@@ -189,7 +200,7 @@ namespace MyPos.Api.Controllers
                     VariantValueId = variantValue.Id
                 });
             }
-            await _context.SaveChangesAsync(); // İlişkileri kaydet
+            await _context.SaveChangesAsync();
 
             var response = new ProductVariantResponseDto
             {
@@ -224,6 +235,8 @@ namespace MyPos.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateProductVariantDto dto)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             if (id != dto.Id)
             {
                 return BadRequest("ID'ler eşleşmiyor.");
@@ -235,37 +248,38 @@ namespace MyPos.Api.Controllers
                 return BadRequest(validationResult.Errors);
             }
 
+            // Varyantı ve ilişkili ürününü bulurken yetki kontrolü
             var productVariant = await _context.ProductVariants
                 .Include(pv => pv.ProductVariantValues)
                 .ThenInclude(pvv => pvv.VariantValue)
                 .ThenInclude(vv => vv.VariantType)
-                .FirstOrDefaultAsync(pv => pv.Id == id);
+                .FirstOrDefaultAsync(pv => pv.Id == id && pv.Product.UserId == currentUserId);
 
             if (productVariant == null)
             {
-                return NotFound();
+                return NotFound("Varyant bulunamadı veya yetkiniz yok.");
             }
 
-            // Ana ürünün varlığını kontrol edin (eğer değişiyorsa)
+            // Ana ürünün değişip değişmediğini kontrol et ve yeni ürünün de kullanıcıya ait olduğunu doğrula
             if (productVariant.ProductId != dto.ProductId)
             {
-                var newProduct = await _context.Products.FindAsync(dto.ProductId);
+                var newProduct = await _context.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId && p.UserId == currentUserId);
                 if (newProduct == null)
                 {
-                    return BadRequest("Belirtilen yeni ana ürün bulunamadı.");
+                    return BadRequest("Belirtilen yeni ana ürün bulunamadı veya yetkiniz yok.");
                 }
-                productVariant.Product = newProduct; // Navigasyon özelliğini güncelleyin
+                productVariant.ProductId = newProduct.Id;
             }
 
-            // Varyant değerlerinin varlığını ve aynı VaryantType'tan sadece bir tane seçildiğini kontrol edin
+            // Yeni varyant değerlerinin varlığını ve kullanıcıya ait olup olmadığını kontrol et
             var newVariantValues = await _context.VariantValues
                 .Include(vv => vv.VariantType)
-                .Where(vv => dto.VariantValueIds.Contains(vv.Id))
+                .Where(vv => dto.VariantValueIds.Contains(vv.Id) && vv.UserId == currentUserId)
                 .ToListAsync();
 
             if (newVariantValues.Count != dto.VariantValueIds.Count)
             {
-                return BadRequest("Bazı varyant değerleri bulunamadı.");
+                return BadRequest("Bazı varyant değerleri bulunamadı veya yetkiniz yok.");
             }
 
             var newVariantTypeCounts = newVariantValues
@@ -289,7 +303,6 @@ namespace MyPos.Api.Controllers
                 });
             }
 
-            productVariant.ProductId = dto.ProductId;
             productVariant.Barcode = dto.Barcode;
             productVariant.Name = dto.Name;
             productVariant.Stock = dto.Stock;
@@ -301,8 +314,7 @@ namespace MyPos.Api.Controllers
 
             await _context.SaveChangesAsync();
 
-            // Güncellenmiş yanıtı döndür
-            var updatedProduct = await _context.Products.FindAsync(productVariant.ProductId);
+            var updatedProduct = await _context.Products.FirstOrDefaultAsync(p => p.Id == productVariant.ProductId);
             var response = new ProductVariantResponseDto
             {
                 Id = productVariant.Id,
@@ -336,10 +348,15 @@ namespace MyPos.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var productVariant = await _context.ProductVariants.FindAsync(id);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Varyantı ve ilişkili ürününü bulurken yetki kontrolü
+            var productVariant = await _context.ProductVariants
+                .FirstOrDefaultAsync(pv => pv.Id == id && pv.Product.UserId == currentUserId);
+
             if (productVariant == null)
             {
-                return NotFound();
+                return NotFound("Varyant bulunamadı veya yetkiniz yok.");
             }
 
             _context.ProductVariants.Remove(productVariant);
@@ -352,9 +369,14 @@ namespace MyPos.Api.Controllers
         [HttpPost("{id}/upload-image")]
         public async Task<IActionResult> UploadImage(int id, IFormFile file)
         {
-            var productVariant = await _context.ProductVariants.FindAsync(id);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Varyantı ve ilişkili ürününü bulurken yetki kontrolü
+            var productVariant = await _context.ProductVariants
+                .FirstOrDefaultAsync(pv => pv.Id == id && pv.Product.UserId == currentUserId);
+
             if (productVariant == null)
-                return NotFound("Ürün varyantı bulunamadı.");
+                return NotFound("Ürün varyantı bulunamadı veya yetkiniz yok.");
 
             if (file == null || file.Length == 0)
                 return BadRequest("Geçerli bir dosya seçilmedi.");
@@ -364,7 +386,7 @@ namespace MyPos.Api.Controllers
                 return BadRequest("Sadece .jpg, .jpeg veya .png dosyaları yüklenebilir.");
 
             var fileName = $"{Guid.NewGuid()}{extension}";
-            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "variants"); // Varyant resimleri için ayrı bir klasör
+            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "variants");
             var fullPath = Path.Combine(folderPath, fileName);
 
             if (!Directory.Exists(folderPath))

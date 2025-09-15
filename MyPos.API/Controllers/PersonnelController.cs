@@ -1,14 +1,19 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MyPos.Infrastructure.Migrations;
 using MyPos.Infrastructure.Persistence;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using System;
+using System.IO;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 [Route("api/[controller]")]
 [ApiController]
-//[Authorize]
+[Authorize] // Auth'u aç
 public class PersonnelController : ControllerBase
 {
     private readonly MyPosDbContext _context;
@@ -23,12 +28,14 @@ public class PersonnelController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromForm] PersonnelCreateDto dto)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var validator = new PersonnelCreateDtoValidator();
         var result = validator.Validate(dto);
         if (!result.IsValid)
             return BadRequest(result.Errors);
 
-          string? imagePath = null;
+        string? imagePath = null;
 
         if (dto.Image != null)
         {
@@ -77,8 +84,8 @@ public class PersonnelController : ControllerBase
             CurrentSalary = dto.CurrentSalary,
             IBAN = dto.IBAN,
             Notes = dto.Notes,
-            ImagePath = imagePath ?? string.Empty
-
+            ImagePath = imagePath ?? string.Empty,
+            UserId = currentUserId // Kullanıcının ID'sini ekle
         };
 
         _context.Personnel.Add(personnel);
@@ -86,28 +93,47 @@ public class PersonnelController : ControllerBase
 
         return Ok("Personel başarıyla eklendi.");
     }
+
     [HttpGet("getall")]
     public IActionResult GetAll()
     {
-        var personals = _context.Personnel.ToList();
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Sadece mevcut kullanıcıya ait personeli getir
+        var personals = _context.Personnel
+                                .Where(p => p.UserId == currentUserId)
+                                .ToList();
+
         return Ok(personals);
     }
+
     [HttpDelete("delete/{id}")]
-    public IActionResult Delete(Guid id) 
+    public IActionResult Delete(Guid id)
     {
-        var personal = _context.Personnel.FirstOrDefault(p => p.Id == id);
-        if (personal == null) return NotFound("Kullanıcı bulunamadı.");
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Personeli bulurken hem ID'yi hem de UserId'yi kontrol et
+        var personal = _context.Personnel
+                               .FirstOrDefault(p => p.Id == id && p.UserId == currentUserId);
+
+        if (personal == null) return NotFound("Kullanıcı bulunamadı veya yetkiniz yok.");
 
         _context.Personnel.Remove(personal);
         _context.SaveChanges();
 
         return Ok("Kullanıcı silindi.");
     }
+
     [HttpPut("update/{id}")]
     public IActionResult Update(Guid id, [FromBody] Personnel updated)
     {
-        var personal = _context.Personnel.FirstOrDefault(p => p.Id == id);
-        if (personal == null) return NotFound("Kullanıcı bulunamadı.");
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Personeli bulurken hem ID'yi hem de UserId'yi kontrol et
+        var personal = _context.Personnel
+                               .FirstOrDefault(p => p.Id == id && p.UserId == currentUserId);
+
+        if (personal == null) return NotFound("Kullanıcı bulunamadı veya yetkiniz yok.");
 
         personal.Name = updated.Name;
         personal.Code = updated.Code;
@@ -120,6 +146,8 @@ public class PersonnelController : ControllerBase
         personal.IBAN = updated.IBAN;
         personal.Notes = updated.Notes;
         personal.ImagePath = updated.ImagePath;
+        // PasswordHash'in bu metotla güncellenmesini engelle
+        // personal.PasswordHash = updated.PasswordHash;
 
         _context.SaveChanges();
 
@@ -127,16 +155,19 @@ public class PersonnelController : ControllerBase
     }
 
     [HttpPut("update-password/{id}")]
-    public IActionResult UpdatePassword(Guid id, [FromBody] string newPassword) 
+    public IActionResult UpdatePassword(Guid id, [FromBody] string newPassword)
     {
-        var personal = _context.Personnel.FirstOrDefault(p => p.Id == id);
-        if (personal == null) return NotFound("Kullanıcı bulunamadı.");
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Personeli bulurken hem ID'yi hem de UserId'yi kontrol et
+        var personal = _context.Personnel
+                               .FirstOrDefault(p => p.Id == id && p.UserId == currentUserId);
+
+        if (personal == null) return NotFound("Kullanıcı bulunamadı veya yetkiniz yok.");
 
         personal.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
         _context.SaveChanges();
 
         return Ok("Şifre güncellendi.");
     }
-
-
 }

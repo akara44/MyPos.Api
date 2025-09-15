@@ -3,11 +3,16 @@ using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos.PurchaseInvoice;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization; // Bu using'i ekle
+using System.Security.Claims; // Bu using'i ekle
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace MyPos.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize] // Auth'u aç ve tüm controller için geçerli kıl
     public class InvoiceReportsController : ControllerBase
     {
         private readonly MyPosDbContext _context;
@@ -20,6 +25,18 @@ namespace MyPos.Api.Controllers
         [HttpGet("CompanyInvoices/{companyId}")]
         public async Task<IActionResult> GetCompanyInvoicesReport(int companyId, DateTime? startDate, DateTime? endDate)
         {
+            // JWT'den mevcut kullanıcının ID'sini al
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Kullanıcının, istediği firmaya erişim yetkisi olup olmadığını kontrol et
+            var company = await _context.Company
+                                        .FirstOrDefaultAsync(c => c.Id == companyId && c.UserId == currentUserId);
+
+            if (company == null)
+            {
+                return NotFound("Firma bulunamadı veya bu firmaya erişim yetkiniz yok.");
+            }
+
             var query = _context.PurchaseInvoices
                 .Include(x => x.Company)
                 .Include(x => x.PaymentType)
