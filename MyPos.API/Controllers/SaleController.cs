@@ -33,23 +33,20 @@ public class SaleController : ControllerBase
         if (!validationResult.IsValid)
             return BadRequest(new { errors = validationResult.Errors });
 
-        // İndirim validasyonu
         if (request.DiscountValue.HasValue)
         {
             if (string.IsNullOrEmpty(request.DiscountType))
                 return BadRequest("İndirim değeri girildiğinde indirim tipi de belirtilmelidir.");
-
             if (request.DiscountValue <= 0)
                 return BadRequest("İndirim değeri 0'dan büyük olmalıdır.");
-
             if (request.DiscountType == "PERCENTAGE" && request.DiscountValue > 100)
                 return BadRequest("Yüzde indirimi 100'den fazla olamaz.");
         }
 
         var productIds = request.SaleItems.Select(x => x.ProductId).ToList();
         var products = await _context.Products
-            .Where(p => productIds.Contains(p.Id) && p.UserId == currentUserId) // Ürünleri kullanıcıya göre filtrele
-            .ToDictionaryAsync(p => p.Id);
+                                     .Where(p => productIds.Contains(p.Id) && p.UserId == currentUserId)
+                                     .ToDictionaryAsync(p => p.Id);
 
         if (products.Count != productIds.Count)
         {
@@ -71,15 +68,13 @@ public class SaleController : ControllerBase
             SaleMiscellaneous = new List<SaleMiscellaneous>(),
             SaleCode = $"SAL-{DateTime.Now:yyyyMMddHHmmss}-{Guid.NewGuid().ToString().Substring(0, 6)}",
             TotalQuantity = 0,
-            UserId = currentUserId // Satışa kullanıcı ID'sini ekle
+            UserId = currentUserId
         };
 
-        // Ürün kalemlerini ekle
         foreach (var itemDto in request.SaleItems)
         {
             if (!products.TryGetValue(itemDto.ProductId, out var product))
                 return NotFound($"Ürün ID'si {itemDto.ProductId} bulunamadı.");
-
             if (product.Stock < itemDto.Quantity)
                 return BadRequest($"Ürün '{product.Name}' için yeterli stok yok. Mevcut stok: {product.Stock}.");
 
@@ -90,7 +85,8 @@ public class SaleController : ControllerBase
                 Quantity = itemDto.Quantity,
                 UnitPrice = product.SalePrice,
                 TotalPrice = itemDto.Quantity * product.SalePrice,
-                Discount = 0
+                Discount = 0,
+                UserId = currentUserId // Düzeltme: UserId eklendi
             };
 
             sale.SubTotalAmount += saleItem.TotalPrice;
@@ -98,7 +94,6 @@ public class SaleController : ControllerBase
             sale.SaleItems.Add(saleItem);
         }
 
-        // ... (indirim ve muhtelif tutarları hesaplayan kısım aynı kalır)
         if (request.DiscountValue.HasValue && !string.IsNullOrEmpty(request.DiscountType))
         {
             decimal discountAmount = 0;
@@ -126,7 +121,8 @@ public class SaleController : ControllerBase
                 {
                     Description = miscItem.Description,
                     Amount = miscItem.Amount,
-                    CreatedDate = DateTime.Now
+                    CreatedDate = DateTime.Now,
+                    UserId = currentUserId // Düzeltme: UserId eklendi
                 };
                 sale.SaleMiscellaneous.Add(saleMisc);
                 sale.MiscellaneousTotal += miscItem.Amount;
@@ -139,7 +135,7 @@ public class SaleController : ControllerBase
         await _context.SaveChangesAsync();
 
         return CreatedAtAction(nameof(GetSaleById), new { saleId = sale.SaleId },
-            await GetSaleDetailsDto(sale.SaleId, currentUserId)); // Pass currentUserId as the second argument
+            await GetSaleDetailsDto(sale.SaleId, currentUserId));
     }
 
     [HttpGet("{saleId}")]
@@ -184,6 +180,7 @@ public class SaleController : ControllerBase
             SaleCode = sale.SaleCode,
             TotalQuantity = sale.TotalQuantity,
             SaleItems = sale.SaleItems.Select(si => new SaleItemDetailsDto
+
             {
                 SaleItemId = si.SaleItemId,
                 ProductId = si.ProductId,

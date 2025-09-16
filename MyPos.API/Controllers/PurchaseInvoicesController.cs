@@ -22,8 +22,8 @@ namespace MyPos.Api.Controllers
         private readonly IValidator<UpdatePurchaseInvoiceDto> _updateValidator;
 
         public PurchaseInvoicesController(MyPosDbContext context,
-                         IValidator<CreatePurchaseInvoiceDto> createValidator,
-                         IValidator<UpdatePurchaseInvoiceDto> updateValidator)
+                                         IValidator<CreatePurchaseInvoiceDto> createValidator,
+                                         IValidator<UpdatePurchaseInvoiceDto> updateValidator)
         {
             _context = context;
             _createValidator = createValidator;
@@ -39,7 +39,6 @@ namespace MyPos.Api.Controllers
             if (!validationResult.IsValid)
                 return BadRequest(validationResult.Errors);
 
-            // Firmanın ve ödeme tipinin mevcut kullanıcıya ait olduğunu doğrula
             var company = await _context.Company
                                         .FirstOrDefaultAsync(c => c.Id == createDto.CompanyId && c.UserId == currentUserId);
             if (company == null) return BadRequest("Firma bulunamadı veya yetkiniz yok.");
@@ -62,15 +61,14 @@ namespace MyPos.Api.Controllers
                     TotalDiscount = 0,
                     TotalTaxAmount = 0,
                     GrandTotal = 0,
-                    UserId = currentUserId // Faturaya kullanıcı ID'sini ekle
-                };
+                    UserId = currentUserId
+                };
 
                 _context.PurchaseInvoices.Add(newInvoice);
                 await _context.SaveChangesAsync();
 
                 foreach (var itemDto in createDto.Items)
                 {
-                    // Ürünün mevcut kullanıcıya ait olduğunu doğrula
                     var product = await _context.Products
                                                 .FirstOrDefaultAsync(p => p.Id == itemDto.ProductId && p.UserId == currentUserId);
                     if (product == null)
@@ -107,7 +105,8 @@ namespace MyPos.Api.Controllers
                         TaxAmount = itemTaxAmount,
                         DiscountRate1 = itemDto.DiscountRate1,
                         DiscountRate2 = itemDto.DiscountRate2,
-                        TotalDiscountAmount = itemDiscount
+                        TotalDiscountAmount = itemDiscount,
+                        UserId = currentUserId // Düzeltme: UserId eklendi
                     };
 
                     _context.PurchaseInvoiceItems.Add(newItem);
@@ -122,8 +121,8 @@ namespace MyPos.Api.Controllers
                         Reason = $"PurchaseInvoice:{newInvoice.Id}",
                         Date = DateTime.Now,
                         BalanceAfter = product.Stock,
-                        UserId = currentUserId // Stok hareketine kullanıcı ID'sini ekle
-                    });
+                        UserId = currentUserId
+                    });
 
                     newInvoice.TotalAmount += itemTotalPrice;
                     newInvoice.TotalDiscount += itemDiscount;
@@ -152,15 +151,13 @@ namespace MyPos.Api.Controllers
             if (!validationResult.IsValid)
                 return BadRequest(validationResult.Errors);
 
-            // Faturayı ve ilişkili verileri bulurken yetki kontrolü
-            var invoice = await _context.PurchaseInvoices
-        .Include(i => i.PurchaseInvoiceItems)
-                .Include(i => i.Company)
-        .FirstOrDefaultAsync(i => i.Id == id && i.UserId == currentUserId);
+            var invoice = await _context.PurchaseInvoices
+                                        .Include(i => i.PurchaseInvoiceItems)
+                                        .Include(i => i.Company)
+                                        .FirstOrDefaultAsync(i => i.Id == id && i.UserId == currentUserId);
 
             if (invoice == null) return NotFound("Fatura bulunamadı veya yetkiniz yok.");
 
-            // Güncellenen firmanın da mevcut kullanıcıya ait olduğunu doğrula
             if (invoice.CompanyId != updateDto.CompanyId)
             {
                 var newCompany = await _context.Company
@@ -168,20 +165,16 @@ namespace MyPos.Api.Controllers
                 if (newCompany == null) return BadRequest("Belirtilen firma bulunamadı veya yetkiniz yok.");
             }
 
-            // Ödeme tipinin mevcut kullanıcıya ait olduğunu doğrula
             var paymentType = await _context.PaymentTypes
                                             .FirstOrDefaultAsync(pt => pt.Id == updateDto.PaymentTypeId && pt.UserId == currentUserId);
             if (paymentType == null) return BadRequest("Ödeme tipi bulunamadı veya yetkiniz yok.");
 
-
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Eski stokları geri al ve stok hareketlerini sil
-                foreach (var oldItem in invoice.PurchaseInvoiceItems)
+                foreach (var oldItem in invoice.PurchaseInvoiceItems)
                 {
-                    // Ürünün mevcut kullanıcıya ait olduğunu doğrula
-                    var product = await _context.Products
+                    var product = await _context.Products
                                                 .FirstOrDefaultAsync(p => p.Id == oldItem.ProductId && p.UserId == currentUserId);
                     if (product != null)
                     {
@@ -195,8 +188,8 @@ namespace MyPos.Api.Controllers
                             Reason = $"PurchaseInvoiceUpdate-Revert:{id}",
                             Date = DateTime.Now,
                             BalanceAfter = product.Stock,
-                            UserId = currentUserId // Stok hareketine kullanıcı ID'sini ekle
-                        });
+                            UserId = currentUserId
+                        });
                     }
                 }
 
@@ -214,8 +207,7 @@ namespace MyPos.Api.Controllers
 
                 foreach (var itemDto in updateDto.Items)
                 {
-                    // Ürünün mevcut kullanıcıya ait olduğunu doğrula
-                    var product = await _context.Products
+                    var product = await _context.Products
                                                 .FirstOrDefaultAsync(p => p.Id == itemDto.ProductId && p.UserId == currentUserId);
                     if (product == null)
                         return BadRequest($"Ürün bulunamadı veya yetkiniz yok: {itemDto.ProductId}");
@@ -251,7 +243,8 @@ namespace MyPos.Api.Controllers
                         TaxAmount = itemTaxAmount,
                         DiscountRate1 = itemDto.DiscountRate1,
                         DiscountRate2 = itemDto.DiscountRate2,
-                        TotalDiscountAmount = itemDiscount
+                        TotalDiscountAmount = itemDiscount,
+                        UserId = currentUserId
                     };
 
                     invoice.PurchaseInvoiceItems.Add(newItem);
@@ -295,18 +288,16 @@ namespace MyPos.Api.Controllers
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Faturayı ve ilişkili verileri bulurken yetki kontrolü
-                var invoice = await _context.PurchaseInvoices
-          .Include(i => i.PurchaseInvoiceItems)
-                    .Include(i => i.Company)
-          .FirstOrDefaultAsync(i => i.Id == id && i.UserId == currentUserId);
+                var invoice = await _context.PurchaseInvoices
+                                            .Include(i => i.PurchaseInvoiceItems)
+                                            .Include(i => i.Company)
+                                            .FirstOrDefaultAsync(i => i.Id == id && i.UserId == currentUserId);
 
                 if (invoice == null) return NotFound("Fatura bulunamadı veya yetkiniz yok.");
 
                 foreach (var item in invoice.PurchaseInvoiceItems)
                 {
-                    // Ürünün mevcut kullanıcıya ait olduğunu doğrula
-                    var product = await _context.Products
+                    var product = await _context.Products
                                                 .FirstOrDefaultAsync(p => p.Id == item.ProductId && p.UserId == currentUserId);
                     if (product != null)
                     {
@@ -339,18 +330,19 @@ namespace MyPos.Api.Controllers
                 return StatusCode(500, "Fatura silinirken hata oluştu: " + ex.Message);
             }
         }
+
         [HttpGet("all")]
         public async Task<ActionResult<List<PurchaseInvoiceDetailsDto>>> GetAllPurchaseInvoices()
         {
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var invoices = await _context.PurchaseInvoices
-              .Include(i => i.Company)
-              .Include(i => i.PurchaseInvoiceItems)
-              .Include(i => i.PaymentType)
-                      .Where(i => i.UserId == currentUserId) // Sadece kullanıcının faturalarını getir
-                      .OrderByDescending(i => i.InvoiceDate)
-              .ToListAsync();
+                                         .Include(i => i.Company)
+                                         .Include(i => i.PurchaseInvoiceItems)
+                                         .Include(i => i.PaymentType)
+                                         .Where(i => i.UserId == currentUserId)
+                                         .OrderByDescending(i => i.InvoiceDate)
+                                         .ToListAsync();
 
             var dtoList = invoices.Select(invoice => new PurchaseInvoiceDetailsDto
             {
