@@ -335,6 +335,7 @@ namespace MyPos.Api.Controllers
                 ProductGroupId = product.ProductGroupId,
                 ProductGroupName = product.ProductGroup.Name,
                 IsActive = product.IsActive
+
             });
         }
     }
