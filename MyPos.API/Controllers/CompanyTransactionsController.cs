@@ -22,7 +22,6 @@ namespace MyPos.Api.Controllers
         {
             _context = context;
         }
-
         [HttpPost("Add")]
         public async Task<IActionResult> AddCompanyTransaction([FromBody] CreateCompanyTransactionDto transactionDto)
         {
@@ -30,17 +29,30 @@ namespace MyPos.Api.Controllers
 
             // Firmanın mevcut kullanıcıya ait olduğunu doğrula
             var company = await _context.Company
-                                         .FirstOrDefaultAsync(c => c.Id == transactionDto.CompanyId && c.UserId == currentUserId);
+                                      .FirstOrDefaultAsync(c => c.Id == transactionDto.CompanyId && c.UserId == currentUserId);
 
             if (company == null)
             {
                 return Unauthorized("Bu firmaya işlem yapma yetkiniz yok.");
             }
 
-            if (transactionDto.Type == TransactionType.Payment && !transactionDto.PaymentTypeId.HasValue)
+            // Eğer işlem bir "Ödeme" ise, seçilen ödeme tipinin de kullanıcıya ait olduğunu doğrula
+            if (transactionDto.Type == TransactionType.Payment)
             {
-                ModelState.AddModelError(nameof(transactionDto.PaymentTypeId), "Ödeme işlemleri için Ödeme Tipi seçilmelidir.");
-                return BadRequest(ModelState);
+                if (!transactionDto.PaymentTypeId.HasValue)
+                {
+                    ModelState.AddModelError(nameof(transactionDto.PaymentTypeId), "Ödeme işlemleri için Ödeme Tipi seçilmelidir.");
+                    return BadRequest(ModelState);
+                }
+
+                // YENİ EKLENEN KISIM: Ödeme tipinin varlığını ve sahipliğini kontrol et
+                var paymentType = await _context.PaymentTypes
+                    .FirstOrDefaultAsync(pt => pt.Id == transactionDto.PaymentTypeId.Value && pt.UserId == currentUserId);
+
+                if (paymentType == null)
+                {
+                    return BadRequest("Seçilen ödeme tipi bulunamadı veya bu ödeme tipini kullanma yetkiniz yok.");
+                }
             }
 
             var transaction = new CompanyTransaction
