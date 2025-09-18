@@ -66,7 +66,7 @@ namespace MyPos.Api.Controllers
             var transactions = await _context.CompanyTransactions
                 .Include(ct => ct.PaymentType)
                 .Where(ct => ct.CompanyId == companyId)
-                .Select(ct => new CompanyFinancialTransactionDto
+                .Select(ct => new CompanyFinancialTransactionDto    
                 {
                     Id = ct.Id,
                     TransactionDate = ct.TransactionDate,
@@ -179,51 +179,55 @@ namespace MyPos.Api.Controllers
             // JWT'den mevcut kullanıcının ID'sini al
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            // Sadece mevcut kullanıcıya ait borç işlemlerini ve ilgili firmalarını çekiyoruz
-            var debtTransactions = await _context.CompanyTransactions
-                .Include(ct => ct.Company)
-                .Where(ct => ct.Type == TransactionType.Debt)
-                .Where(ct => ct.Company.UserId == currentUserId) // Buraya filtreyi ekle
+            // 1. ADIM: Kullanıcının tüm firmalarını al
+            var userCompanies = await _context.Company
+                .Where(c => c.UserId == currentUserId && c.TermDays.HasValue && c.TermDays.Value > 0)
                 .ToListAsync();
 
             var approachingPayments = new List<ApproachingPaymentDto>();
 
-            foreach (var transaction in debtTransactions)
+            foreach (var company in userCompanies)
             {
-                // ... (geri kalan kod aynı kalır)
-                if (!transaction.Company.TermDays.HasValue || transaction.Company.TermDays.Value <= 0)
+                // 2. ADIM: Her firma için toplam borç/ödeme durumunu hesapla
+                var totalDebt = await _context.CompanyTransactions
+                    .Where(ct => ct.CompanyId == company.Id && ct.Type == TransactionType.Debt)
+                    .SumAsync(ct => ct.Amount);
+
+                var totalPayments = await _context.CompanyTransactions
+                    .Where(ct => ct.CompanyId == company.Id && ct.Type == TransactionType.Payment)
+                    .SumAsync(ct => ct.Amount);
+
+                var remainingDebt = totalDebt - totalPayments;
+
+                // 3. ADIM: Eğer kalan borç varsa, vade kontrolü yap
+                if (remainingDebt > 0)
                 {
-                    continue;
-                }
+                    // Son borç işlemini al (vade hesabı için)
+                    var lastDebtTransaction = await _context.CompanyTransactions
+                        .Where(ct => ct.CompanyId == company.Id && ct.Type == TransactionType.Debt)
+                        .OrderByDescending(ct => ct.TransactionDate)
+                        .FirstOrDefaultAsync();
 
-                var paymentDueDate = transaction.TransactionDate.AddDays(transaction.Company.TermDays.Value);
-                var daysUntilDue = (int)(paymentDueDate.Date - DateTime.Today).TotalDays;
-
-                if (daysUntilDue <= 30)
-                {
-                    // Bu firmanın güncel toplam kalan borcunu hesapla
-                    var totalDebtForCompany = await _context.CompanyTransactions
-                        .Where(ct => ct.CompanyId == transaction.CompanyId && ct.Type == TransactionType.Debt)
-                        .SumAsync(ct => ct.Amount);
-
-                    var totalPaymentsForCompany = await _context.CompanyTransactions
-                        .Where(ct => ct.CompanyId == transaction.CompanyId && ct.Type == TransactionType.Payment)
-                        .SumAsync(ct => ct.Amount);
-
-                    var companyRemainingDebt = totalDebtForCompany - totalPaymentsForCompany;
-
-                    if (companyRemainingDebt > 0)
+                    if (lastDebtTransaction != null)
                     {
-                        approachingPayments.Add(new ApproachingPaymentDto
+                        // 4. ADIM: Vade tarihini hesapla
+                        var paymentDueDate = lastDebtTransaction.TransactionDate.AddDays(company.TermDays.Value);
+                        var daysUntilDue = (int)(paymentDueDate.Date - DateTime.Today).TotalDays;
+
+                        // 5. ADIM: 30 gün içinde ödenmesi gerekiyorsa listeye ekle
+                        if (daysUntilDue <= 30)
                         {
-                            PaymentDueDate = paymentDueDate,
-                            CompanyName = transaction.Company.Name,
-                            TotalRemainingDebt = companyRemainingDebt,
-                            Description = transaction.Description ?? "Elle girilen borç",
-                            TransactionAmount = transaction.Amount,
-                            TransactionDate = transaction.TransactionDate,
-                            DaysUntilDue = daysUntilDue
-                        });
+                            approachingPayments.Add(new ApproachingPaymentDto
+                            {
+                                PaymentDueDate = paymentDueDate,
+                                CompanyName = company.Name,
+                                TotalRemainingDebt = remainingDebt, // Firmanın toplam kalan borcu
+                                Description = lastDebtTransaction.Description ?? "Son borç işlemi",
+                                TransactionAmount = lastDebtTransaction.Amount, // Son işlemin tutarı
+                                TransactionDate = lastDebtTransaction.TransactionDate, // Son işlemin tarihi
+                                DaysUntilDue = daysUntilDue
+                            });
+                        }
                     }
                 }
             }
