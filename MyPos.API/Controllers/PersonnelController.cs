@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Infrastructure.Migrations;
 using MyPos.Infrastructure.Persistence;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
