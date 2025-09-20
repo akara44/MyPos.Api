@@ -1,5 +1,6 @@
 ﻿using MyPos.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion; // BU SATIRI EKLEDİM
 
 namespace MyPos.Infrastructure.Persistence
 {
@@ -23,7 +24,6 @@ namespace MyPos.Infrastructure.Persistence
         public DbSet<Customer> Customers { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<Payment> Payments { get; set; }
-
         public DbSet<PurchaseInvoice> PurchaseInvoices { get; set; }
         public DbSet<PurchaseInvoiceItem> PurchaseInvoiceItems { get; set; }
         public DbSet<Sale> Sales { get; set; }
@@ -32,8 +32,30 @@ namespace MyPos.Infrastructure.Persistence
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder);         
-            
+            base.OnModelCreating(modelBuilder);
+
+            // ==============================================================================
+            // === EKLEDİĞİM KOD BAŞLANGICI ===
+            // Projedeki tüm DateTime property'lerini bulup UTC'ye otomatik çevrilmesini sağlar.
+            // Bu, PostgreSQL'in "Cannot write DateTime with Kind=Local" hatasını çözer.
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                foreach (var property in entityType.GetProperties())
+                {
+                    if (property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?))
+                    {
+                        property.SetValueConverter(
+                            new ValueConverter<DateTime, DateTime>(
+                                v => v.ToUniversalTime(), // Kaydederken UTC'ye çevir
+                                v => DateTime.SpecifyKind(v, DateTimeKind.Utc) // Okurken türünü UTC olarak belirt
+                            )
+                        );
+                    }
+                }
+            }
+            // === EKLEDİĞİM KOD BİTİŞİ ===
+            // ==============================================================================
+
 
             modelBuilder.Entity<ProductGroup>()
                 .HasOne(pg => pg.ParentGroup)
@@ -52,7 +74,7 @@ namespace MyPos.Infrastructure.Persistence
                 .WithMany(vt => vt.VariantValues)
                 .HasForeignKey(vv => vv.VariantTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
-             
+
             // Yeni Varyant İlişkileri
             modelBuilder.Entity<ProductVariant>()
                 .HasOne(pv => pv.Product)
@@ -85,6 +107,7 @@ namespace MyPos.Infrastructure.Persistence
                 .WithMany(c => c.Payments)
                 .HasForeignKey(p => p.CustomerId)
                 .IsRequired(); // CustomerId'nin zorunlu olduğunu belirtiyoruz.
+
             // Yeni eklenen ilişki: PurchaseInvoice ve PaymentType
             modelBuilder.Entity<PurchaseInvoice>()
              .HasOne(pi => pi.PaymentType)

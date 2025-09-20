@@ -15,7 +15,7 @@ namespace MyPos.Domain.Entities
         [Required(ErrorMessage = "Bağlı Kasa boş bırakılamaz.")]
         public CashRegisterType CashRegisterType { get; set; }
 
-        public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
         public ICollection<PurchaseInvoice> PurchaseInvoices { get; set; } = new List<PurchaseInvoice>();
         public string UserId { get; set; }
     }

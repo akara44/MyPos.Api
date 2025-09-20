@@ -85,7 +85,7 @@ namespace MyPos.API.Controllers
             {
                 Name = paymentTypeDto.Name,
                 CashRegisterType = paymentTypeDto.CashRegisterType,
-                CreatedDate = DateTime.Now,
+                CreatedDate = DateTime.UtcNow,
                 UserId = currentUserId // Oluşturulan veriye kullanıcının ID'sini ekle
             };
 
