@@ -32,4 +32,7 @@ public class Customer
     // Bir müşterinin birden fazla ödemesi olabilir.
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
     public string UserId { get; set; }
+
+      [Column(TypeName = "decimal(18, 2)")]
+    public decimal Balance { get; set; } = 0;
 }

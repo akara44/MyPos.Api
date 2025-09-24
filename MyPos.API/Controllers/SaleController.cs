@@ -250,6 +250,8 @@ public class SaleController : ControllerBase
         return Ok(salesDto);
     }
 
+    // SaleController.cs
+
     [HttpPost("{saleId}/finalize")]
     public async Task<IActionResult> FinalizeSale(int saleId, [FromBody] FinalizeSaleRequestDto request)
     {
@@ -260,7 +262,7 @@ public class SaleController : ControllerBase
         {
             var sale = await _context.Sales
                 .Include(s => s.SaleItems)
-                .FirstOrDefaultAsync(s => s.SaleId == saleId && s.UserId == currentUserId); // Satış yetki kontrolü
+                .FirstOrDefaultAsync(s => s.SaleId == saleId && s.UserId == currentUserId);
 
             if (sale == null)
                 return NotFound($"Satış ID'si {saleId} bulunamadı veya yetkiniz yok.");
@@ -274,27 +276,50 @@ public class SaleController : ControllerBase
 
             sale.PaymentType = paymentType.Name;
 
+            if (sale.CustomerId.HasValue)
+            {
+                var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == sale.CustomerId.Value && c.UserId == currentUserId);
+                if (customer == null)
+                {
+                    throw new Exception("Satışa bağlı müşteri bulunamadı.");
+                }
+
+                if (paymentType.Name.Equals("Açık Hesap", StringComparison.OrdinalIgnoreCase))
+                {
+                    // DEĞİŞİKLİK BURADA: Artık 'yeniBakiye' yerine 'sale.TotalAmount' kontrol ediliyor.
+                    if (customer.OpenAccountLimit.HasValue && sale.TotalAmount > customer.OpenAccountLimit.Value)
+                    {
+                        return BadRequest($"Tek seferlik satış limiti aşıldı. Limit: {customer.OpenAccountLimit.Value:F2}, Satış Tutarı: {sale.TotalAmount:F2}");
+                    }
+
+                    // Bakiye güncellemesi aynı kalıyor. Limiti aşmasa bile borcu borcuna eklenmeli.
+                    customer.Balance += sale.TotalAmount;
+                    _context.Customers.Update(customer);
+                }
+            }
+
+            // Stok düşürme mantığı aynı şekilde devam ediyor...
             var productIds = sale.SaleItems.Select(si => si.ProductId).ToList();
             var products = await _context.Products
-                .Where(p => productIds.Contains(p.Id) && p.UserId == currentUserId) // Ürün yetki kontrolü
+                .Where(p => productIds.Contains(p.Id) && p.UserId == currentUserId)
                 .ToDictionaryAsync(p => p.Id);
 
             foreach (var saleItem in sale.SaleItems)
             {
-                if (!products.TryGetValue(saleItem.ProductId, out var product))
-                    continue;
-
-                product.Stock -= saleItem.Quantity;
-                _context.StockTransaction.Add(new StockTransaction
+                if (products.TryGetValue(saleItem.ProductId, out var product))
                 {
-                    ProductId = product.Id,
-                    QuantityChange = -saleItem.Quantity,
-                    TransactionType = "OUT",
-                    Reason = $"Sale:{saleId}",
-                    Date = DateTime.Now,
-                    BalanceAfter = product.Stock,
-                    UserId = currentUserId // Stok hareketine kullanıcı ID'sini ekle
-                });
+                    product.Stock -= saleItem.Quantity;
+                    _context.StockTransaction.Add(new StockTransaction
+                    {
+                        ProductId = product.Id,
+                        QuantityChange = -saleItem.Quantity,
+                        TransactionType = "OUT",
+                        Reason = $"Sale:{saleId}",
+                        Date = DateTime.Now,
+                        BalanceAfter = product.Stock,
+                        UserId = currentUserId
+                    });
+                }
             }
 
             sale.IsCompleted = true;

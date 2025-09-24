@@ -183,34 +183,37 @@ public class CustomerController : ControllerBase
         return NoContent();
     }
 
+    // CustomerController.cs içinde
+
     [HttpGet("{id}/summary")]
     public async Task<ActionResult<CustomerSummaryDto>> GetCustomerSummary(int id)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        // Müşterinin varlığını ve yetkisini kontrol et
-        var customerExists = await _context.Customers
-                                            .AnyAsync(c => c.Id == id && c.UserId == currentUserId);
+        // DÜZELTME: Müşterinin kendisini direkt çekiyoruz çünkü Balance bilgisi lazım.
+        var customer = await _context.Customers
+                                     .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
 
-        if (!customerExists)
+        if (customer == null)
         {
             return NotFound("Belirtilen müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        // Müşterinin toplam satış tutarını hesapla
-        // `Orders` tablosunda `UserId` filtresi olmadığını varsayarak,
-        // `Orders` ve `Payments` tablolarının `CustomerId` üzerinden `Customers` ile ilişkili olduğunu kullanacağız.
-        // Bu, dolaylı olarak yetkilendirme sağlar.
-        var totalSales = await _context.Orders
-      .Where(o => o.CustomerId == id)
-      .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
+        // DÜZELTME: Toplam satışı 'Orders' yerine 'Sales' tablosundan hesaplıyoruz.
+        // Sadece tamamlanmış satışları dikkate alıyoruz.
+        var totalSales = await _context.Sales
+            .Where(s => s.CustomerId == id && s.IsCompleted)
+            .SumAsync(s => (decimal?)s.TotalAmount) ?? 0;
 
-        // Müşterinin toplam ödeme tutarını hesapla
-        var totalPayment = await _context.Payments
-      .Where(p => p.CustomerId == id)
-      .SumAsync(p => (decimal?)p.Amount) ?? 0;
+        // Toplam ödeme, müşterinin yaptığı tüm ödemelerin toplamıdır.
+        // Bu kısım muhtemelen gelecekte bir ödeme ekranı yapınca daha anlamlı olacak.
+        var totalPayment = await _context.Payments
+            .Where(p => p.CustomerId == id)
+            .SumAsync(p => (decimal?)p.Amount) ?? 0;
 
-        var remainingBalance = totalSales - totalPayment;
+        // DÜZELTME: Kalan bakiye için artık sıfırdan hesaplama yapmıyoruz.
+        // Direkt olarak Customer entity'sine eklediğimiz Balance alanını kullanıyoruz. BU ÇOK DAHA HIZLI!
+        var remainingBalance = customer.Balance;
 
         var summaryDto = new CustomerSummaryDto
         {
@@ -220,5 +223,38 @@ public class CustomerController : ControllerBase
         };
 
         return Ok(summaryDto);
+    }
+    [HttpGet("{id}/sales")]
+    public async Task<IActionResult> GetCustomerSales(int id, [FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!await _context.Customers.AnyAsync(c => c.Id == id && c.UserId == currentUserId))
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
+
+        var query = _context.Sales
+            .Where(s => s.CustomerId == id && s.IsCompleted); // Sadece tamamlanmış satışlar
+
+        // Ekran görüntüsündeki gibi tarih filtresi
+        if (startDate.HasValue)
+            query = query.Where(s => s.SaleDate.Date >= startDate.Value.Date);
+        if (endDate.HasValue)
+            query = query.Where(s => s.SaleDate.Date <= endDate.Value.Date);
+
+        // Not: Mevcut OrderListDto'nu bu amaç için yeniden kullanabiliriz, alanları uyumlu görünüyor.
+        var salesList = await query
+            .OrderByDescending(s => s.SaleDate)
+            .Select(s => new OrderListDto
+            {
+                Id = s.SaleId,
+                OrderCode = s.SaleCode,
+                OrderDate = s.SaleDate,
+                TotalAmount = s.TotalAmount,
+                TotalDiscount = s.DiscountAmount,
+                PaymentType = s.PaymentType,
+                PersonnelName = "Admin" // TODO: Personel modülü gelince dinamikleşir
+                                        // RemainingDebt alanı için ayrıca bir mantık kurmak gerekebilir, şimdilik boş kalabilir.
+            }).ToListAsync();
+
+        return Ok(salesList);
     }
 }
