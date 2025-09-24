@@ -252,6 +252,8 @@ public class SaleController : ControllerBase
 
     // SaleController.cs
 
+    // SaleController.cs
+
     [HttpPost("{saleId}/finalize")]
     public async Task<IActionResult> FinalizeSale(int saleId, [FromBody] FinalizeSaleRequestDto request)
     {
@@ -286,15 +288,23 @@ public class SaleController : ControllerBase
 
                 if (paymentType.Name.Equals("Açık Hesap", StringComparison.OrdinalIgnoreCase))
                 {
-                    // DEĞİŞİKLİK BURADA: Artık 'yeniBakiye' yerine 'sale.TotalAmount' kontrol ediliyor.
-                    if (customer.OpenAccountLimit.HasValue && sale.TotalAmount > customer.OpenAccountLimit.Value)
+                    // --- MANTIK DEĞİŞİKLİĞİ BAŞLANGIÇ ---
+
+                    // Önce potansiyel yeni bakiyeyi hesaplıyoruz.
+                    decimal yeniBakiye = customer.Balance + sale.TotalAmount;
+
+                    // Kontrolü artık 'yeniBakiye' üzerinden yapıyoruz (Eski haline döndü).
+                    if (customer.OpenAccountLimit.HasValue && yeniBakiye > customer.OpenAccountLimit.Value)
                     {
-                        return BadRequest($"Tek seferlik satış limiti aşıldı. Limit: {customer.OpenAccountLimit.Value:F2}, Satış Tutarı: {sale.TotalAmount:F2}");
+                        // Hata mesajını yeni mantığa göre güncelledik.
+                        return BadRequest($"Bu satış ile müşterinin toplam borç limiti aşılamaz. Limit: {customer.OpenAccountLimit.Value:F2}, Mevcut Borç: {customer.Balance:F2}, Yeni Borç: {yeniBakiye:F2}");
                     }
 
-                    // Bakiye güncellemesi aynı kalıyor. Limiti aşmasa bile borcu borcuna eklenmeli.
-                    customer.Balance += sale.TotalAmount;
+                    // Bakiyeyi, kontrol sonrası daha önce hesapladığımız değişkenle güncelliyoruz.
+                    customer.Balance = yeniBakiye;
                     _context.Customers.Update(customer);
+
+                    // --- MANTIK DEĞİŞİKLİĞİ BİTİŞ ---
                 }
             }
 
