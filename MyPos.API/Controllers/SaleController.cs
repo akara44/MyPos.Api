@@ -246,7 +246,6 @@ public class SaleController : ControllerBase
                 CreatedDate = sm.CreatedDate
             }).ToList()
         }).ToList();
-
         return Ok(salesDto);
     }
 

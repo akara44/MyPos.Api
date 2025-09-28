@@ -224,6 +224,8 @@ public class CustomerController : ControllerBase
 
         return Ok(summaryDto);
     }
+    // CustomerController.cs içinde
+
     [HttpGet("{id}/sales")]
     public async Task<IActionResult> GetCustomerSales(int id, [FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
     {
@@ -232,27 +234,39 @@ public class CustomerController : ControllerBase
             return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
 
         var query = _context.Sales
-            .Where(s => s.CustomerId == id && s.IsCompleted); // Sadece tamamlanmış satışlar
+            .Where(s => s.CustomerId == id && s.IsCompleted);
 
-        // Ekran görüntüsündeki gibi tarih filtresi
         if (startDate.HasValue)
             query = query.Where(s => s.SaleDate.Date >= startDate.Value.Date);
         if (endDate.HasValue)
             query = query.Where(s => s.SaleDate.Date <= endDate.Value.Date);
 
-        // Not: Mevcut OrderListDto'nu bu amaç için yeniden kullanabiliriz, alanları uyumlu görünüyor.
         var salesList = await query
             .OrderByDescending(s => s.SaleDate)
-            .Select(s => new OrderListDto
+            .Select(s => new CustomerSaleListDto // DTO'yu yeni oluşturduğumuzla değiştirdik
             {
-                Id = s.SaleId,
-                OrderCode = s.SaleCode,
-                OrderDate = s.SaleDate,
+                SaleId = s.SaleId,
+                SaleCode = s.SaleCode,
+                TotalQuantity = s.TotalQuantity, // YENİ: Toplam ürün sayısı eklendi.
+
+                // YENİ: İskonto oranı hesaplanıyor (Tutar / Ara Toplam * 100)
+                // Ara toplam 0 ise, sıfıra bölünme hatası almamak için oran 0 kabul edilir.
+                DiscountRate = (s.SubTotalAmount > 0) ? Math.Round((s.DiscountAmount / s.SubTotalAmount * 100), 2) : 0,
+
                 TotalAmount = s.TotalAmount,
-                TotalDiscount = s.DiscountAmount,
+
+                // YENİ: Kalan borç hesaplanıyor.
+                // O satışa ait yapılmış ödemelerin toplamını, satış tutarından çıkarıyoruz.
+                // EF Core bunu verimli bir alt sorguya çevirir.
+                RemainingDebt = s.TotalAmount - (_context.Payments.Where(p => p.SaleId == s.SaleId).Sum(p => (decimal?)p.Amount) ?? 0),
+
                 PaymentType = s.PaymentType,
-                PersonnelName = "Admin" // TODO: Personel modülü gelince dinamikleşir
-                                        // RemainingDebt alanı için ayrıca bir mantık kurmak gerekebilir, şimdilik boş kalabilir.
+                PersonnelName = "Admin", // TODO: Dinamik hale getirilecek
+
+                // YENİ: Tarih ve Saat alanları formatlanarak ayrıldı.
+                Date = s.SaleDate.ToString("dd.MM.yyyy"),
+                Time = s.SaleDate.ToString("HH:mm")
+
             }).ToListAsync();
 
         return Ok(salesList);
