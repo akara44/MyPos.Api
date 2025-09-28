@@ -226,11 +226,16 @@ public class CustomerController : ControllerBase
     }
     // CustomerController.cs içinde
 
+    // CustomerController.cs içinde
+
     [HttpGet("{id}/sales")]
     public async Task<IActionResult> GetCustomerSales(int id, [FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!await _context.Customers.AnyAsync(c => c.Id == id && c.UserId == currentUserId))
+
+        // 1. Müşterinin kendisini ve güncel Balance bilgisini en başta bir kere çekiyoruz.
+        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+        if (customer == null)
             return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
 
         var query = _context.Sales
@@ -242,31 +247,22 @@ public class CustomerController : ControllerBase
             query = query.Where(s => s.SaleDate.Date <= endDate.Value.Date);
 
         var salesList = await query
-            .OrderByDescending(s => s.SaleDate)
-            .Select(s => new CustomerSaleListDto // DTO'yu yeni oluşturduğumuzla değiştirdik
+            .OrderByDescending(s => s.SaleDate) // Listenin yeniden eskiye sıralandığından emin ol
+            .Select(s => new CustomerSaleListDto
             {
                 SaleId = s.SaleId,
                 SaleCode = s.SaleCode,
-                TotalQuantity = s.TotalQuantity, // YENİ: Toplam ürün sayısı eklendi.
-
-                // YENİ: İskonto oranı hesaplanıyor (Tutar / Ara Toplam * 100)
-                // Ara toplam 0 ise, sıfıra bölünme hatası almamak için oran 0 kabul edilir.
+                TotalQuantity = s.TotalQuantity,
                 DiscountRate = (s.SubTotalAmount > 0) ? Math.Round((s.DiscountAmount / s.SubTotalAmount * 100), 2) : 0,
-
                 TotalAmount = s.TotalAmount,
 
-                // YENİ: Kalan borç hesaplanıyor.
-                // O satışa ait yapılmış ödemelerin toplamını, satış tutarından çıkarıyoruz.
-                // EF Core bunu verimli bir alt sorguya çevirir.
-                RemainingDebt = s.TotalAmount - (_context.Payments.Where(p => p.SaleId == s.SaleId).Sum(p => (decimal?)p.Amount) ?? 0),
+                // DEĞİŞİKLİK: Her satır için müşterinin GÜNCEL toplam borcunu basıyoruz.
+                RemainingDebt = customer.Balance,
 
                 PaymentType = s.PaymentType,
-                PersonnelName = "Admin", // TODO: Dinamik hale getirilecek
-
-                // YENİ: Tarih ve Saat alanları formatlanarak ayrıldı.
+                PersonnelName = "Admin",
                 Date = s.SaleDate.ToString("dd.MM.yyyy"),
                 Time = s.SaleDate.ToString("HH:mm")
-
             }).ToListAsync();
 
         return Ok(salesList);
