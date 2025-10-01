@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Application.Dtos.Customers; // Bu using'in doğru olduğundan emin ol
+using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 using System; // DateTime için eklendi
 using System.Collections.Generic;
@@ -223,9 +224,8 @@ public class CustomerController : ControllerBase
     }
 
     // --- BU METODLARDA DEĞİŞİKLİK YAPILMADI ---
-
-    [HttpGet("{id}/summary")]
-    public async Task<ActionResult<CustomerSummaryDto>> GetCustomerSummary(int id)
+    [HttpGet("{id}/detailed-summary")]
+    public async Task<ActionResult<CustomerDetailedSummaryDto>> GetCustomerDetailedSummary(int id)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var customer = await _context.Customers
@@ -233,27 +233,83 @@ public class CustomerController : ControllerBase
 
         if (customer == null)
         {
-            return NotFound("Belirtilen müşteri bulunamadı veya yetkiniz yok.");
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        var totalSales = await _context.Sales
-            .Where(s => s.CustomerId == id && s.IsCompleted)
-            .SumAsync(s => (decimal?)s.TotalAmount) ?? 0;
+        // 1. Veritabanındaki ödeme tiplerini SADECE GİRİŞ YAPAN KULLANICI İÇİN çekelim.
+        var paymentTypes = await _context.PaymentTypes
+            .Where(pt => pt.UserId == currentUserId) // <-- DEĞİŞİKLİK BURADA
+            .ToDictionaryAsync(pt => pt.Name, pt => pt.CashRegisterType);
 
+        // 2. Müşteriye ait tamamlanmış tüm satışları çekiyoruz.
+        var allSales = await _context.Sales
+            .Include(s => s.SaleItems)
+                .ThenInclude(si => si.Product)
+            .Where(s => s.CustomerId == id && s.IsCompleted)
+            .ToListAsync();
+
+        // 3. Müşterinin yaptığı tüm ödemeleri (tahsilatları) çekiyoruz.
         var totalPayment = await _context.Payments
             .Where(p => p.CustomerId == id)
             .SumAsync(p => (decimal?)p.Amount) ?? 0;
 
-        var remainingBalance = customer.Balance;
+        // 4. DTO'yu ve hesaplamaları hazırlıyoruz.
+        var summary = new CustomerDetailedSummaryDto();
 
-        var summaryDto = new CustomerSummaryDto
+        summary.TotalSales = allSales.Sum(s => s.TotalAmount);
+        summary.TotalPayment = totalPayment;
+        summary.RemainingBalance = customer.Balance;
+
+        // 5. Satışları Kasa Türüne Göre Gruplama
+        summary.SalesByCashRegisterType["Nakit"] = 0;
+        summary.SalesByCashRegisterType["Pos"] = 0;
+        summary.SalesByCashRegisterType["HariciKasa"] = 0;
+        summary.SalesByCashRegisterType["Açık Hesap"] = 0;
+
+        foreach (var sale in allSales)
         {
-            TotalSales = totalSales,
-            TotalPayment = totalPayment,
-            RemainingBalance = remainingBalance
-        };
+            if (string.IsNullOrEmpty(sale.PaymentType)) continue;
 
-        return Ok(summaryDto);
+            if (sale.PaymentType.ToLower() == "açık hesap")
+            {
+                summary.SalesByCashRegisterType["Açık Hesap"] += sale.TotalAmount;
+            }
+            else if (paymentTypes.TryGetValue(sale.PaymentType, out var cashRegisterType))
+            {
+                switch (cashRegisterType)
+                {
+                    case CashRegisterType.Nakit:
+                        summary.SalesByCashRegisterType["Nakit"] += sale.TotalAmount;
+                        break;
+                    case CashRegisterType.Pos:
+                        summary.SalesByCashRegisterType["Pos"] += sale.TotalAmount;
+                        break;
+                    case CashRegisterType.HariciKasa:
+                        summary.SalesByCashRegisterType["HariciKasa"] += sale.TotalAmount;
+                        break;
+                }
+            }
+        }
+
+        summary.TotalDebtFromSales = summary.SalesByCashRegisterType["Açık Hesap"];
+
+        // 6. Kâr Hesaplaması (Product.PurchasePrice kullanarak)
+        decimal totalProfit = 0;
+        foreach (var sale in allSales)
+        {
+            foreach (var item in sale.SaleItems)
+            {
+                if (item.Product != null)
+                {
+                    var itemProfit = (item.UnitPrice - item.Product.PurchasePrice) * item.Quantity;
+                    totalProfit += itemProfit;
+                }
+            }
+        }
+        summary.TotalProfit = totalProfit;
+
+
+        return Ok(summary);
     }
 
     [HttpGet("{id}/sales")]
