@@ -355,61 +355,121 @@ public class SaleController : ControllerBase
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        var sale = await _context.Sales
-            .FirstOrDefaultAsync(s => s.SaleId == saleId && s.UserId == currentUserId); // Satış yetki kontrolü
-        if (sale == null)
-            return NotFound("Satış bulunamadı veya yetkiniz yok.");
-
-        if (sale.IsCompleted)
-            return BadRequest("Satış zaten tamamlanmış.");
-
-        var totalSplit = request.SplitPayments.Sum(x => x.Amount);
-        if (totalSplit != sale.TotalAmount)
-            return BadRequest($"Parçalı ödemelerin toplamı ({totalSplit}) satış tutarına ({sale.TotalAmount}) eşit değil.");
-
-        // Ödeme tiplerini tek sorguda al ve yetkiyi kontrol et
-        var paymentTypeIds = request.SplitPayments.Where(sp => sp.PaymentTypeId.HasValue).Select(sp => sp.PaymentTypeId.Value).ToList();
-        var paymentTypes = await _context.PaymentTypes
-                                         .Where(pt => paymentTypeIds.Contains(pt.Id) && pt.UserId == currentUserId)
-                                         .ToDictionaryAsync(pt => pt.Id);
-
-        foreach (var sp in request.SplitPayments)
+        // DİKKAT: Stok düşürme ve müşteri bakiye güncelleme işlemleri için transaction kullanmak önemli.
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            string paymentTypeName;
-            if (sp.PaymentTypeName == "Nakit" || sp.PaymentTypeName == "POS")
+            var sale = await _context.Sales
+                .Include(s => s.SaleItems) // Stok düşürmek için SaleItems dahil edildi.
+                .FirstOrDefaultAsync(s => s.SaleId == saleId && s.UserId == currentUserId);
+
+            if (sale == null)
+                return NotFound("Satış bulunamadı veya yetkiniz yok.");
+
+            if (sale.IsCompleted)
+                return BadRequest("Satış zaten tamamlanmış.");
+
+            var totalSplit = request.SplitPayments.Sum(x => x.Amount);
+            if (totalSplit != sale.TotalAmount)
+                return BadRequest($"Parçalı ödemelerin toplamı ({totalSplit}) satış tutarına ({sale.TotalAmount}) eşit değil.");
+
+            var paymentTypeIds = request.SplitPayments.Where(sp => sp.PaymentTypeId.HasValue).Select(sp => sp.PaymentTypeId.Value).ToList();
+            var paymentTypes = await _context.PaymentTypes
+                                             .Where(pt => paymentTypeIds.Contains(pt.Id) && pt.UserId == currentUserId)
+                                             .ToDictionaryAsync(pt => pt.Id);
+
+            // Müşteri ve Açık Hesap Kontrolü
+            var hasOpenAccountPayment = false;
+            foreach (var sp in request.SplitPayments)
             {
-                paymentTypeName = sp.PaymentTypeName;
+                if (paymentTypes.TryGetValue(sp.PaymentTypeId ?? 0, out var pt) && pt.Name.Equals("Açık Hesap", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasOpenAccountPayment = true;
+                    if (!sale.CustomerId.HasValue)
+                    {
+                        return BadRequest("Açık Hesap ödemesi için satışa bir müşteri atanmalıdır.");
+                    }
+                    var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == sale.CustomerId.Value && c.UserId == currentUserId);
+                    if (customer == null)
+                    {
+                        throw new Exception("Satışa bağlı müşteri bulunamadı.");
+                    }
+                    decimal yeniBakiye = customer.Balance + sp.Amount; // Sadece açık hesap tutarı kadar borç eklenir.
+                    if (customer.OpenAccountLimit.HasValue && yeniBakiye > customer.OpenAccountLimit.Value)
+                    {
+                        return BadRequest($"Bu işlem ile müşterinin borç limiti aşılamaz. Limit: {customer.OpenAccountLimit.Value:F2}, Mevcut Borç: {customer.Balance:F2}, Yeni Borç: {yeniBakiye:F2}");
+                    }
+                    customer.Balance = yeniBakiye;
+                    _context.Customers.Update(customer);
+                }
             }
-            else
+
+            // Ödeme Kayıtlarını Oluşturma
+            foreach (var sp in request.SplitPayments)
             {
-                if (sp.PaymentTypeId == null)
-                    return BadRequest("DB ödeme tipi için PaymentTypeId boş olamaz.");
+                string paymentTypeName = sp.PaymentTypeName;
+                if (sp.PaymentTypeId.HasValue && paymentTypes.TryGetValue(sp.PaymentTypeId.Value, out var pt))
+                {
+                    paymentTypeName = pt.Name;
+                }
 
-                if (!paymentTypes.TryGetValue(sp.PaymentTypeId.Value, out var paymentType))
-                    return BadRequest($"Geçersiz ödeme tipi: {sp.PaymentTypeId} veya yetkiniz yok.");
-
-                paymentTypeName = paymentType.Name;
+                _context.Payments.Add(new Payment
+                {
+                    SaleId = sale.SaleId,
+                    CustomerId = sale.CustomerId  ?? 0,
+                    Amount = sp.Amount,
+                    PaymentDate = DateTime.Now,
+                    PaymentTypeName = paymentTypeName,
+                    UserId = currentUserId
+                });
             }
 
-            _context.Payments.Add(new Payment
+            // Stok Düşürme
+            var productIds = sale.SaleItems.Select(si => si.ProductId).ToList();
+            var products = await _context.Products
+                .Where(p => productIds.Contains(p.Id) && p.UserId == currentUserId)
+                .ToDictionaryAsync(p => p.Id);
+
+            foreach (var saleItem in sale.SaleItems)
             {
-                SaleId = sale.SaleId,
-                CustomerId = sale.CustomerId ?? 0,
-                Amount = sp.Amount,
-                PaymentDate = DateTime.Now,
-                PaymentTypeName = paymentTypeName,
-                UserId = currentUserId // Ödemeye kullanıcı ID'sini ekle
+                if (products.TryGetValue(saleItem.ProductId, out var product))
+                {
+                    if (product.Stock < saleItem.Quantity)
+                    {
+                        throw new Exception($"'{product.Name}' için yeterli stok yok. İşlem iptal edildi.");
+                    }
+                    product.Stock -= saleItem.Quantity;
+                    _context.StockTransaction.Add(new StockTransaction
+                    {
+                        ProductId = product.Id,
+                        QuantityChange = -saleItem.Quantity,
+                        TransactionType = "OUT",
+                        Reason = $"Sale:{saleId}",
+                        Date = DateTime.Now,
+                        BalanceAfter = product.Stock,
+                        UserId = currentUserId
+                    });
+                }
+            }
+
+            // Satış Durumunu Güncelle
+            sale.PaymentType = "Parçalı"; // <<< DEĞİŞİKLİK BURADA
+            sale.IsCompleted = true;
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Ok(new
+            {
+                message = "Satış parçalı ödeme ile tamamlandı.",
+                totalAmount = sale.TotalAmount
             });
         }
-
-        sale.IsCompleted = true;
-        await _context.SaveChangesAsync();
-
-        return Ok(new
+        catch (Exception ex)
         {
-            message = "Satış parçalı ödeme ile tamamlandı.",
-            totalAmount = sale.TotalAmount
-        });
+            await transaction.RollbackAsync();
+            return StatusCode(500, "Satış tamamlanırken hata oluştu: " + ex.Message);
+        }
     }
 }
 

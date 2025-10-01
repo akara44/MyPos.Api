@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyPos.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MyPos.Infrastructure.Migrations
 {
     [DbContext(typeof(MyPosDbContext))]
-    partial class MyPosDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250930223540_UpdateCustomerEntityWithDetails")]
+    partial class UpdateCustomerEntityWithDetails
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -31,6 +34,7 @@ namespace MyPos.Infrastructure.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Address")
+                        .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
 
@@ -38,18 +42,22 @@ namespace MyPos.Infrastructure.Migrations
                         .HasColumnType("decimal(18, 2)");
 
                     b.Property<string>("City")
+                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
                     b.Property<string>("Country")
+                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
                     b.Property<string>("CustomerCode")
+                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
                     b.Property<string>("CustomerLastName")
+                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
@@ -59,9 +67,11 @@ namespace MyPos.Infrastructure.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<string>("CustomerNote")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("CustomerType")
+                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
@@ -69,6 +79,7 @@ namespace MyPos.Infrastructure.Migrations
                         .HasColumnType("decimal(18, 2)");
 
                     b.Property<string>("District")
+                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
@@ -76,6 +87,7 @@ namespace MyPos.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("Email")
+                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
@@ -83,10 +95,12 @@ namespace MyPos.Infrastructure.Migrations
                         .HasColumnType("decimal(18, 2)");
 
                     b.Property<string>("Phone")
+                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
                     b.Property<string>("PostalCode")
+                        .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
@@ -94,10 +108,12 @@ namespace MyPos.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("TaxNumber")
+                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
                     b.Property<string>("TaxOffice")
+                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 

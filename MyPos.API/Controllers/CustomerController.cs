@@ -1,16 +1,17 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.Dtos.Customers;
+using MyPos.Application.Dtos.Customers; // Bu using'in doğru olduğundan emin ol
 using MyPos.Infrastructure.Persistence;
+using System; // DateTime için eklendi
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Claims; // Bu using'i ekle
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize] // Auth'u aç ve tüm controller için geçerli kıl
+[Authorize]
 public class CustomerController : ControllerBase
 {
     private readonly MyPosDbContext _context;
@@ -20,129 +21,168 @@ public class CustomerController : ControllerBase
         _context = context;
     }
 
+    // --- DEĞİŞİKLİK 1: GET Metodları Artık "GetCustomerDto" Kullanıyor ---
+    // Bu, müşterinin tüm detaylı bilgilerini frontend'e göndermemizi sağlar.
+
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<CustomerDto>>> GetCustomers()
+    public async Task<ActionResult<IEnumerable<GetCustomerDto>>> GetCustomers()
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        // Sadece mevcut kullanıcıya ait müşterileri listele
-        var customers = await _context.Customers
-                                        .Where(c => c.UserId == currentUserId)
-                                        .ToListAsync();
+        var customers = await _context.Customers
+            .Where(c => c.UserId == currentUserId)
+            .Select(c => new GetCustomerDto
+            {
+                Id = c.Id,
+                CustomerType = c.CustomerType,
+                CustomerCode = c.CustomerCode,
+                CustomerName = c.CustomerName,
+                CustomerLastName = c.CustomerLastName,
+                Email = c.Email,
+                Phone = c.Phone,
+                Country = c.Country,
+                City = c.City,
+                District = c.District,
+                Address = c.Address,
+                PostalCode = c.PostalCode,
+                TaxOffice = c.TaxOffice,
+                TaxNumber = c.TaxNumber,
+                OpenAccountLimit = c.OpenAccountLimit,
+                DueDateInDays = c.DueDateInDays,
+                Discount = c.Discount,
+                PriceType = c.PriceType,
+                CustomerNote = c.CustomerNote,
+                Balance = c.Balance
+            })
+            .ToListAsync();
 
-        var customerDtos = customers.Select(c => new CustomerDto
-        {
-            Id = c.Id,
-            CustomerName = c.CustomerName,
-            DueDate = c.DueDate,
-            Phone = c.Phone,
-            Address = c.Address,
-            CustomerNote = c.CustomerNote,
-            OpenAccountLimit = c.OpenAccountLimit,
-            TaxOffice = c.TaxOffice,
-            TaxNumber = c.TaxNumber
-        }).ToList();
-
-        return Ok(customerDtos);
+        return Ok(customers);
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<CustomerDto>> GetCustomer(int id)
+    public async Task<ActionResult<GetCustomerDto>> GetCustomer(int id)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
-        var customer = await _context.Customers
-                                        .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
 
         if (customer == null)
         {
             return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        var customerDto = new CustomerDto
+        var customerDto = new GetCustomerDto
         {
             Id = customer.Id,
+            CustomerType = customer.CustomerType,
+            CustomerCode = customer.CustomerCode,
             CustomerName = customer.CustomerName,
-            DueDate = customer.DueDate,
+            CustomerLastName = customer.CustomerLastName,
+            Email = customer.Email,
             Phone = customer.Phone,
+            Country = customer.Country,
+            City = customer.City,
+            District = customer.District,
             Address = customer.Address,
-            CustomerNote = customer.CustomerNote,
-            OpenAccountLimit = customer.OpenAccountLimit,
+            PostalCode = customer.PostalCode,
             TaxOffice = customer.TaxOffice,
-            TaxNumber = customer.TaxNumber
+            TaxNumber = customer.TaxNumber,
+            OpenAccountLimit = customer.OpenAccountLimit,
+            DueDateInDays = customer.DueDateInDays,
+            Discount = customer.Discount,
+            PriceType = customer.PriceType,
+            CustomerNote = customer.CustomerNote,
+            Balance = customer.Balance
         };
 
         return Ok(customerDto);
     }
 
+    // --- DEĞİŞİKLİK 2: POST (Create) Metodu "CreateCustomerDto" Kullanıyor ---
+    // Sadece hızlı kayıt formundaki verileri alır.
+
     [HttpPost]
-    public async Task<ActionResult<CustomerDto>> CreateCustomer(CustomerDto customerDto)
+    public async Task<ActionResult<GetCustomerDto>> CreateCustomer(CreateCustomerDto createDto)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        var validator = new CustomerValidator();
         var customer = new Customer
         {
-            CustomerName = customerDto.CustomerName,
-            DueDate = customerDto.DueDate,
-            Phone = customerDto.Phone,
-            Address = customerDto.Address,
-            CustomerNote = customerDto.CustomerNote,
-            OpenAccountLimit = customerDto.OpenAccountLimit,
-            TaxOffice = customerDto.TaxOffice,
-            TaxNumber = customerDto.TaxNumber,
-            UserId = currentUserId // Oluşturulan veriye kullanıcının ID'sini ekle
-        };
+            // CreateCustomerDto'dan gelen alanlar
+            CustomerName = createDto.CustomerName,
+            DueDateInDays = createDto.DueDateInDays,
+            Phone = createDto.Phone,
+            Address = createDto.Address,
+            CustomerNote = createDto.CustomerNote,
+            OpenAccountLimit = createDto.OpenAccountLimit,
+            TaxOffice = createDto.TaxOffice,
+            TaxNumber = createDto.TaxNumber,
 
-        var validationResult = validator.Validate(customer);
-        if (!validationResult.IsValid)
-        {
-            return BadRequest(validationResult.Errors);
-        }
+            // Otomatik veya varsayılan değerler
+            UserId = currentUserId,
+            CustomerCode = Guid.NewGuid().ToString().Substring(0, 8).ToUpper(), // Örnek müşteri kodu
+            CustomerType = "Bireysel" // Varsayılan değer
+        };
+
+        // ÖNEMLİ: Artık DTO'ya özel bir validator kullanmalısın.
+        // var validator = new CreateCustomerDtoValidator();
+        // var validationResult = validator.Validate(createDto);
+        // if (!validationResult.IsValid) { return BadRequest(validationResult.Errors); }
 
         _context.Customers.Add(customer);
         await _context.SaveChangesAsync();
 
-        customerDto.Id = customer.Id;
+        // Oluşturulan müşterinin tüm bilgilerini (GetCustomerDto) geri dönelim.
+        var resultDto = await GetCustomer(customer.Id);
 
-        return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, customerDto);
+        return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, resultDto.Value);
     }
 
+    // --- DEĞİŞİKLİK 3: PUT (Update) Metodu "UpdateCustomerDto" Kullanıyor ---
+    // Detaylı müşteri bilgi ekranındaki tüm verileri alıp günceller.
+
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateCustomer(int id, CustomerDto customerDto)
+    public async Task<IActionResult> UpdateCustomer(int id, UpdateCustomerDto updateDto)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        if (id != customerDto.Id)
+        if (id != updateDto.Id)
         {
             return BadRequest("ID uyuşmuyor.");
         }
 
-        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
-        var existingCustomer = await _context.Customers
-                                                .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+        var existingCustomer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
 
         if (existingCustomer == null)
         {
             return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        existingCustomer.CustomerName = customerDto.CustomerName;
-        existingCustomer.DueDate = customerDto.DueDate;
-        existingCustomer.Phone = customerDto.Phone;
-        existingCustomer.Address = customerDto.Address;
-        existingCustomer.CustomerNote = customerDto.CustomerNote;
-        existingCustomer.OpenAccountLimit = customerDto.OpenAccountLimit;
-        existingCustomer.TaxOffice = customerDto.TaxOffice;
-        existingCustomer.TaxNumber = customerDto.TaxNumber;
+        // Tüm alanları updateDto'dan alarak güncelle
+        existingCustomer.CustomerType = updateDto.CustomerType;
+        existingCustomer.CustomerName = updateDto.CustomerName;
+        existingCustomer.CustomerLastName = updateDto.CustomerLastName;
+        existingCustomer.Email = updateDto.Email;
+        existingCustomer.Phone = updateDto.Phone;
+        existingCustomer.Country = updateDto.Country;
+        existingCustomer.City = updateDto.City;
+        existingCustomer.District = updateDto.District;
+        existingCustomer.Address = updateDto.Address;
+        existingCustomer.PostalCode = updateDto.PostalCode;
+        existingCustomer.TaxOffice = updateDto.TaxOffice;
+        existingCustomer.TaxNumber = updateDto.TaxNumber;
+        existingCustomer.OpenAccountLimit = updateDto.OpenAccountLimit;
+        existingCustomer.DueDateInDays = updateDto.DueDateInDays;
+        existingCustomer.Discount = updateDto.Discount;
+        existingCustomer.PriceType = updateDto.PriceType;
+        existingCustomer.CustomerNote = updateDto.CustomerNote;
 
-        var validator = new CustomerValidator();
-        var validationResult = validator.Validate(existingCustomer);
-        if (!validationResult.IsValid)
-        {
-            return BadRequest(validationResult.Errors);
-        }
+        // ÖNEMLİ: Artık DTO'ya özel bir validator kullanmalısın.
+        // var validator = new UpdateCustomerDtoValidator();
+        // var validationResult = validator.Validate(updateDto);
+        // if (!validationResult.IsValid) { return BadRequest(validationResult.Errors); }
 
         try
         {
@@ -168,9 +208,8 @@ public class CustomerController : ControllerBase
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
-        var customer = await _context.Customers
-                                        .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
 
         if (customer == null)
         {
@@ -183,36 +222,28 @@ public class CustomerController : ControllerBase
         return NoContent();
     }
 
-    // CustomerController.cs içinde
+    // --- BU METODLARDA DEĞİŞİKLİK YAPILMADI ---
 
     [HttpGet("{id}/summary")]
     public async Task<ActionResult<CustomerSummaryDto>> GetCustomerSummary(int id)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        // DÜZELTME: Müşterinin kendisini direkt çekiyoruz çünkü Balance bilgisi lazım.
         var customer = await _context.Customers
-                                     .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
 
         if (customer == null)
         {
             return NotFound("Belirtilen müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        // DÜZELTME: Toplam satışı 'Orders' yerine 'Sales' tablosundan hesaplıyoruz.
-        // Sadece tamamlanmış satışları dikkate alıyoruz.
         var totalSales = await _context.Sales
             .Where(s => s.CustomerId == id && s.IsCompleted)
             .SumAsync(s => (decimal?)s.TotalAmount) ?? 0;
 
-        // Toplam ödeme, müşterinin yaptığı tüm ödemelerin toplamıdır.
-        // Bu kısım muhtemelen gelecekte bir ödeme ekranı yapınca daha anlamlı olacak.
         var totalPayment = await _context.Payments
             .Where(p => p.CustomerId == id)
             .SumAsync(p => (decimal?)p.Amount) ?? 0;
 
-        // DÜZELTME: Kalan bakiye için artık sıfırdan hesaplama yapmıyoruz.
-        // Direkt olarak Customer entity'sine eklediğimiz Balance alanını kullanıyoruz. BU ÇOK DAHA HIZLI!
         var remainingBalance = customer.Balance;
 
         var summaryDto = new CustomerSummaryDto
@@ -224,16 +255,11 @@ public class CustomerController : ControllerBase
 
         return Ok(summaryDto);
     }
-    // CustomerController.cs içinde
-
-    // CustomerController.cs içinde
 
     [HttpGet("{id}/sales")]
     public async Task<IActionResult> GetCustomerSales(int id, [FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        // 1. Müşterinin kendisini ve güncel Balance bilgisini en başta bir kere çekiyoruz.
         var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
         if (customer == null)
             return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
@@ -247,7 +273,7 @@ public class CustomerController : ControllerBase
             query = query.Where(s => s.SaleDate.Date <= endDate.Value.Date);
 
         var salesList = await query
-            .OrderByDescending(s => s.SaleDate) // Listenin yeniden eskiye sıralandığından emin ol
+            .OrderByDescending(s => s.SaleDate)
             .Select(s => new CustomerSaleListDto
             {
                 SaleId = s.SaleId,
@@ -255,12 +281,9 @@ public class CustomerController : ControllerBase
                 TotalQuantity = s.TotalQuantity,
                 DiscountRate = (s.SubTotalAmount > 0) ? Math.Round((s.DiscountAmount / s.SubTotalAmount * 100), 2) : 0,
                 TotalAmount = s.TotalAmount,
-
-                // DEĞİŞİKLİK: Her satır için müşterinin GÜNCEL toplam borcunu basıyoruz.
                 RemainingDebt = customer.Balance,
-
                 PaymentType = s.PaymentType,
-                PersonnelName = "Admin",
+                PersonnelName = "Admin", // Bu alanı daha sonra dinamik yapabilirsin
                 Date = s.SaleDate.ToString("dd.MM.yyyy"),
                 Time = s.SaleDate.ToString("HH:mm")
             }).ToListAsync();
