@@ -45,26 +45,34 @@ public class PaymentsController : ControllerBase
             return NotFound("Müşteri bulunamadı veya bu işlem için yetkiniz yok.");
         }
 
-        // 2. Yeni bir Payment nesnesi oluştur
+        // 2. YENİ KONTROL: Ödeme Tipinin ID'si (PaymentTypeId) geçerli mi?
+        var paymentTypeExists = await _context.PaymentTypes
+            .AnyAsync(pt => pt.Id == createPaymentDto.PaymentTypeId && pt.UserId == currentUserId);
+
+        if (!paymentTypeExists)
+        {
+            return BadRequest("Geçersiz Ödeme Tipi ID'si. Lütfen tanımlı ödeme tiplerinden birini seçin.");
+        }
+
+        // 3. Yeni bir Payment nesnesi oluştur
         var payment = new Payment
         {
             UserId = currentUserId,
             CustomerId = createPaymentDto.CustomerId,
             Amount = createPaymentDto.Amount,
             PaymentDate = createPaymentDto.PaymentDate.ToUniversalTime(),
-            PaymentType = createPaymentDto.PaymentType,
+            PaymentTypeId = createPaymentDto.PaymentTypeId, // ARTIK ID KULLANILIYOR
 
             Note = createPaymentDto.Note
         };
 
-        // 3. Müşterinin bakiyesini güncelle (Yapılan ödeme borçtan düşülür)
+        // 4. Müşterinin bakiyesini güncelle
         customer.Balance -= payment.Amount;
 
-        // 4. Veritabanına kaydet
+        // 5. Veritabanına kaydet
         _context.Payments.Add(payment);
         await _context.SaveChangesAsync();
 
-        // 201 Created durum kodu ile birlikte oluşturulan kaynağı (veya bir onay mesajı) dön
         return StatusCode(201, new { message = "Ödeme başarıyla eklendi." });
     }
 
@@ -77,7 +85,7 @@ public class PaymentsController : ControllerBase
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        // Müşterinin varlığını ve kullanıcıya ait olduğunu kontrol et
+        // Müşteri kontrolü
         var customerExists = await _context.Customers
             .AnyAsync(c => c.Id == customerId && c.UserId == currentUserId);
 
@@ -87,13 +95,14 @@ public class PaymentsController : ControllerBase
         }
 
         var payments = await _context.Payments
+            .Include(p => p.PaymentType) // PaymentType verisini çekmeyi dahil et
             .Where(p => p.CustomerId == customerId && p.UserId == currentUserId)
             .OrderByDescending(p => p.PaymentDate)
             .Select(p => new PaymentListDto
             {
                 Id = p.Id,
                 Amount = p.Amount,
-                PaymentType = p.PaymentType,
+                PaymentType = p.PaymentType.Name, // İlişkili PaymentType tablosundaki adı çek
                 Date = p.PaymentDate.ToLocalTime().ToString("dd.MM.yyyy"),
                 Time = p.PaymentDate.ToLocalTime().ToString("HH:mm"),
                 Note = p.Note

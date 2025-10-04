@@ -20,8 +20,9 @@ namespace MyPos.Application.Dtos.Payments
         [Required]
         public DateTime PaymentDate { get; set; }
 
-        [Required]
-        public string PaymentType { get; set; }
+        // DEĞİŞİKLİK: string yerine PaymentTypeId (int) kullanılıyor
+        [Required(ErrorMessage = "Ödeme Tipi seçimi zorunludur.")]
+        public int PaymentTypeId { get; set; } // YENİ ALAN
 
         public string? Note { get; set; }
     }

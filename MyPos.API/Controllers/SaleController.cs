@@ -416,10 +416,11 @@ public class SaleController : ControllerBase
                 _context.Payments.Add(new Payment
                 {
                     SaleId = sale.SaleId,
-                    CustomerId = sale.CustomerId  ?? 0,
+                    CustomerId = sale.CustomerId ?? 0,
                     Amount = sp.Amount,
                     PaymentDate = DateTime.Now,
-                    PaymentType = paymentTypeName,
+                    PaymentTypeId = sp.PaymentTypeId ?? 0, // <-- Use PaymentTypeId property
+                    Note = paymentTypeName, // Optionally store the name in Note if needed
                     UserId = currentUserId
                 });
             }
