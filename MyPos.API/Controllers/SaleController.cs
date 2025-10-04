@@ -419,7 +419,7 @@ public class SaleController : ControllerBase
                     CustomerId = sale.CustomerId  ?? 0,
                     Amount = sp.Amount,
                     PaymentDate = DateTime.Now,
-                    PaymentTypeName = paymentTypeName,
+                    PaymentType = paymentTypeName,
                     UserId = currentUserId
                 });
             }
