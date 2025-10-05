@@ -29,6 +29,7 @@ public class PaymentsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreatePayment([FromBody] CreatePaymentDto createPaymentDto)
     {
+        // ... (Mevcut CreatePayment metodunuz burada devam ediyor)
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
@@ -61,12 +62,11 @@ public class PaymentsController : ControllerBase
             CustomerId = createPaymentDto.CustomerId,
             Amount = createPaymentDto.Amount,
             PaymentDate = createPaymentDto.PaymentDate.ToUniversalTime(),
-            PaymentTypeId = createPaymentDto.PaymentTypeId, // ARTIK ID KULLANILIYOR
-
+            PaymentTypeId = createPaymentDto.PaymentTypeId,
             Note = createPaymentDto.Note
         };
 
-        // 4. Müşterinin bakiyesini güncelle
+        // 4. Müşterinin bakiyesini güncelle (Ödeme geldiği için borç azalır)
         customer.Balance -= payment.Amount;
 
         // 5. Veritabanına kaydet
@@ -76,6 +76,101 @@ public class PaymentsController : ControllerBase
         return StatusCode(201, new { message = "Ödeme başarıyla eklendi." });
     }
 
+    // ======================================================================
+    // YENİ ENDPOINT: PUT - Ödeme Güncelleme
+    // ======================================================================
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdatePayment(int id, [FromBody] UpdatePaymentDto updatePaymentDto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // 1. Ödeme kaydını bul
+        var payment = await _context.Payments
+            .Include(p => p.Customer) // Müşteriyi de dahil et
+            .FirstOrDefaultAsync(p => p.Id == id && p.UserId == currentUserId);
+
+        if (payment == null)
+        {
+            return NotFound("Ödeme kaydı bulunamadı veya yetkiniz yok.");
+        }
+
+        // 2. Ödeme Tipinin geçerliliğini kontrol et
+        var paymentTypeExists = await _context.PaymentTypes
+            .AnyAsync(pt => pt.Id == updatePaymentDto.PaymentTypeId && pt.UserId == currentUserId);
+
+        if (!paymentTypeExists)
+        {
+            return BadRequest("Geçersiz Ödeme Tipi ID'si.");
+        }
+
+        var originalAmount = payment.Amount;
+        var newAmount = updatePaymentDto.Amount;
+
+        // 3. Müşteri Bakiyesini Güncelleme Mantığı (KRİTİK KISIM)
+        // Yeni Bakiyeyi Hesapla = Eski Bakiye + (Eski Ödeme Miktarı - Yeni Ödeme Miktarı)
+        // (Eski ödemeyi iptal edip, yeni ödemeyi uygular)
+        payment.Customer.Balance += originalAmount; // Eski tahsilatı iptal et (borcu artır)
+        payment.Customer.Balance -= newAmount;      // Yeni tahsilatı uygula (borcu azalt)
+
+        // 4. Ödeme nesnesini güncelle
+        payment.Amount = newAmount;
+        payment.PaymentDate = updatePaymentDto.PaymentDate.ToUniversalTime();
+        payment.PaymentTypeId = updatePaymentDto.PaymentTypeId;
+        payment.Note = updatePaymentDto.Note;
+
+        try
+        {
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Ödeme başarıyla güncellendi.", newBalance = payment.Customer.Balance });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return StatusCode(500, "Veritabanı güncelleme hatası oluştu.");
+        }
+    }
+
+    // ======================================================================
+    // YENİ ENDPOINT: DELETE - Ödeme Silme
+    // ======================================================================
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeletePayment(int id)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // 1. Ödeme kaydını bul
+        var payment = await _context.Payments
+            .Include(p => p.Customer) // Müşteriyi de dahil et
+            .FirstOrDefaultAsync(p => p.Id == id && p.UserId == currentUserId);
+
+        if (payment == null)
+        {
+            return NotFound("Ödeme kaydı bulunamadı veya yetkiniz yok.");
+        }
+
+        // 2. Müşteri Bakiyesini Güncelleme Mantığı (KRİTİK KISIM)
+        // Ödeme silindiği için, müşterinin borcu (Balance) silinen ödeme miktarı kadar ARTIRILMALIDIR.
+        payment.Customer.Balance += payment.Amount;
+
+        // 3. Veritabanından sil
+        _context.Payments.Remove(payment);
+
+        try
+        {
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Ödeme başarıyla silindi.", newBalance = payment.Customer.Balance });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return StatusCode(500, "Veritabanı silme hatası oluştu.");
+        }
+    }
+
+
     // GET: api/customers/{customerId}/payments
     /// <summary>
     /// Belirtilen müşteriye ait tüm ödemeleri listeler.
@@ -83,6 +178,7 @@ public class PaymentsController : ControllerBase
     [HttpGet("/api/customers/{customerId}/payments")]
     public async Task<ActionResult<IEnumerable<PaymentListDto>>> GetPaymentsForCustomer(int customerId)
     {
+        // ... (Mevcut GetPaymentsForCustomer metodunuz burada devam ediyor)
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         // Müşteri kontrolü
