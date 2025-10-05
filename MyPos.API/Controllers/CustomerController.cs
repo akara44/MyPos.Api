@@ -236,9 +236,9 @@ public class CustomerController : ControllerBase
             return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        // 1. Veritabanındaki ödeme tiplerini SADECE GİRİŞ YAPAN KULLANICI İÇİN çekelim.
+        // 1. Veritabanındaki ödeme tiplerini çekelim.
         var paymentTypes = await _context.PaymentTypes
-            .Where(pt => pt.UserId == currentUserId) // <-- DEĞİŞİKLİK BURADA
+            .Where(pt => pt.UserId == currentUserId)
             .ToDictionaryAsync(pt => pt.Name, pt => pt.CashRegisterType);
 
         // 2. Müşteriye ait tamamlanmış tüm satışları çekiyoruz.
@@ -253,11 +253,16 @@ public class CustomerController : ControllerBase
             .Where(p => p.CustomerId == id)
             .SumAsync(p => (decimal?)p.Amount) ?? 0;
 
+        // Manuel olarak eklenen tüm borçların toplamını çekiyoruz (Debt tablosu)
+        var totalManualDebt = await _context.Debts
+            .Where(d => d.CustomerId == id)
+            .SumAsync(d => (decimal?)d.Amount) ?? 0;
+
         // 4. DTO'yu ve hesaplamaları hazırlıyoruz.
         var summary = new CustomerDetailedSummaryDto();
 
-        summary.TotalSales = allSales.Sum(s => s.TotalAmount);
-        summary.TotalPayment = totalPayment;
+        summary.TotalSales = allSales.Sum(s => s.TotalAmount); // Satışlardan gelen brüt ciro
+        summary.TotalPayment = totalPayment; // Tahsilatlardan gelen brüt ciro
         summary.RemainingBalance = customer.Balance;
 
         // 5. Satışları Kasa Türüne Göre Gruplama
@@ -265,6 +270,7 @@ public class CustomerController : ControllerBase
         summary.SalesByCashRegisterType["Pos"] = 0;
         summary.SalesByCashRegisterType["HariciKasa"] = 0;
         summary.SalesByCashRegisterType["Açık Hesap"] = 0;
+        decimal salesDebt = 0; // Açık Hesap Satış Borcunu toplamak için geçici değişken
 
         foreach (var sale in allSales)
         {
@@ -273,6 +279,7 @@ public class CustomerController : ControllerBase
             if (sale.PaymentType.ToLower() == "açık hesap")
             {
                 summary.SalesByCashRegisterType["Açık Hesap"] += sale.TotalAmount;
+                salesDebt += sale.TotalAmount;
             }
             else if (paymentTypes.TryGetValue(sale.PaymentType, out var cashRegisterType))
             {
@@ -291,9 +298,14 @@ public class CustomerController : ControllerBase
             }
         }
 
-        summary.TotalDebtFromSales = summary.SalesByCashRegisterType["Açık Hesap"];
+        // Toplam Brüt Borcu hesaplama
+        summary.TotalDebtFromSales = salesDebt + totalManualDebt;
 
-        // 6. Kâr Hesaplaması (Product.PurchasePrice kullanarak)
+        // YENİ KRİTİK EKLENTİ: Toplam Müşteri Geliri (Total Revenue)
+        // Bu, müşteriden alınan tüm paranın (satış esnasında peşin gelen + borca karşılık sonradan gelen) toplamıdır.
+        summary.TotalCustomerRevenue = summary.TotalSales + summary.TotalPayment;
+
+        // 6. Kâr Hesaplaması (TotalProfit)
         decimal totalProfit = 0;
         foreach (var sale in allSales)
         {
