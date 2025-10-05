@@ -346,48 +346,6 @@ public class CustomerController : ControllerBase
 
         return Ok(salesList);
     }
-    [HttpPost("add-debt")] // Örn: api/Customer/add-debt
-    public async Task<IActionResult> AddDebt(AddDebtDto addDebtDto)
-    {
-        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        // 1. Müşteriyi bulma
-        var customer = await _context.Customers
-            .FirstOrDefaultAsync(c => c.Id == addDebtDto.CustomerId && c.UserId == currentUserId);
-
-        if (customer == null)
-        {
-            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
-        }
-
-        // Borç tutarının pozitif olduğundan emin olalım
-        if (addDebtDto.DebtAmount <= 0)
-        {
-            return BadRequest("Borç tutarı pozitif bir değer olmalıdır.");
-        }
-
-        // 2. Müşteri bakiyesini güncelleme (Borç eklediğimiz için bakiye artar)
-        customer.Balance += addDebtDto.DebtAmount;
-
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // Borç ekleme işlemi için bu hata pek beklenmez ama iyi bir pratik.
-            if (!_context.Customers.Any(e => e.Id == addDebtDto.CustomerId && e.UserId == currentUserId))
-            {
-                return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
-            }
-            else
-            {
-                throw;
-            }
-        }
-
-        // İşlem başarılı, yeni bakiyeyi de dönebilirsiniz
-        return Ok(new { newBalance = customer.Balance, message = $"{addDebtDto.DebtAmount} TL tutarında borç eklendi." });
-    }
+   
 
 }
