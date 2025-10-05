@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using System;
 
-namespace MyPos.Application.Dtos.Payments
+namespace MyPos.Application.Dtos.Customers.Payments
 {
     public class PaymentListDto
     {
