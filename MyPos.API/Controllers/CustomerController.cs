@@ -358,6 +358,153 @@ public class CustomerController : ControllerBase
 
         return Ok(salesList);
     }
-   
+    [HttpGet("{id}/combined-transactions")]
+    public async Task<ActionResult<IEnumerable<CustomerCombinedTransactionDto>>> GetCombinedTransactionsForCustomer(
+     int id,
+     [FromQuery] DateTime? startDate,
+     [FromQuery] DateTime? endDate)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // 1. Müşteri ve yetki kontrolü
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
+        if (customer == null)
+        {
+            return NotFound("Müşteri bulunamadı veya bu işlem için yetkiniz yok.");
+        }
+
+        // Başlangıç tarihi 00:00:00, Bitiş tarihi 23:59:59 olarak ayarlanır
+        var startFilterDate = startDate.HasValue ? startDate.Value.Date : (DateTime?)null;
+        var endFilterDate = endDate.HasValue ? endDate.Value.Date.AddDays(1).AddSeconds(-1) : (DateTime?)null;
+
+
+        // 2. Satışları Çek ve DTO'ya Dönüştür
+        // Satışlar borç yarattığı için borç hareketi olarak kabul edilir.
+        var salesQuery = _context.Sales
+            .Where(s => s.CustomerId == id && s.IsCompleted && s.UserId == currentUserId);
+
+        if (startFilterDate.HasValue)
+            salesQuery = salesQuery.Where(s => s.SaleDate >= startFilterDate.Value);
+        if (endFilterDate.HasValue)
+            salesQuery = salesQuery.Where(s => s.SaleDate <= endFilterDate.Value);
+
+        var sales = await salesQuery
+            .Select(s => new CustomerCombinedTransactionDto
+            {
+                Id = s.SaleId,
+                TransactionDate = s.SaleDate,
+                TransactionTime = s.SaleDate.ToLocalTime().ToString("HH:mm"),
+                Description = $"Satış Kodu: {s.SaleCode}",
+                Type = "Satış",
+                Amount = s.TotalAmount,
+                PaymentTypeName = s.PaymentType,
+                TotalQuantity = s.TotalQuantity,
+                PersonnelName = "Yönetici" // Personel bilginizi buraya ekleyin
+            })
+            .ToListAsync();
+
+        // 3. Ödemeleri (Tahsilatları) Çek ve DTO'ya Dönüştür
+        // Ödemeler borcu azalttığı için alacak hareketi olarak kabul edilir.
+        var paymentsQuery = _context.Payments
+            .Include(p => p.PaymentType) // PaymentType adını almak için
+            .Where(p => p.CustomerId == id && p.UserId == currentUserId);
+
+        if (startFilterDate.HasValue)
+            paymentsQuery = paymentsQuery.Where(p => p.PaymentDate >= startFilterDate.Value);
+        if (endFilterDate.HasValue)
+            paymentsQuery = paymentsQuery.Where(p => p.PaymentDate <= endFilterDate.Value);
+
+        var payments = await paymentsQuery
+            .Select(p => new CustomerCombinedTransactionDto
+            {
+                Id = p.Id,
+                TransactionDate = p.PaymentDate,
+                TransactionTime = p.PaymentDate.ToLocalTime().ToString("HH:mm"),
+                Description = p.Note ?? "Ödeme (Tahsilat)",
+                Type = "Ödeme",
+                Amount = p.Amount,
+                PaymentTypeName = p.PaymentType != null ? p.PaymentType.Name : "Bilinmiyor",
+                TotalQuantity = null,
+                PersonnelName = "Yönetici"
+            })
+            .ToListAsync();
+
+        // 4. Manuel Borçları Çek ve DTO'ya Dönüştür
+        // Manuel Borçlar borcu artırdığı için borç hareketi olarak kabul edilir.
+        var debtsQuery = _context.Debts
+            .Where(d => d.CustomerId == id && d.UserId == currentUserId);
+
+        if (startFilterDate.HasValue)
+            debtsQuery = debtsQuery.Where(d => d.DebtDate >= startFilterDate.Value);
+        if (endFilterDate.HasValue)
+            debtsQuery = debtsQuery.Where(d => d.DebtDate <= endFilterDate.Value);
+
+        var debts = await debtsQuery
+            .Select(d => new CustomerCombinedTransactionDto
+            {
+                Id = d.Id,
+                TransactionDate = d.DebtDate,
+                TransactionTime = d.DebtDate.ToLocalTime().ToString("HH:mm"),
+                Description = d.Note ?? "Manuel Borç Ekleme",
+                Type = "Borç",
+                Amount = d.Amount,
+                PaymentTypeName = "Açık Hesap", // Borçlar genellikle açık hesaba yazılır
+                TotalQuantity = null,
+                PersonnelName = "Yönetici"
+            })
+            .ToListAsync();
+
+        // 5. Tüm Hareketleri Birleştir ve Tarihe Göre Sırala
+        var combinedList = sales
+            .Concat(payments)
+            .Concat(debts)
+            .OrderBy(x => x.TransactionDate) // En eski işlem en başta olacak şekilde sırala
+            .ToList();
+
+        // 6. Kalan Bakiyeyi Hesaplama (En Kritik Kısım)
+
+        // Filtrelenmiş işlemlerden önceki bakiyeyi (Açılış Bakiyesi) bul
+        decimal initialBalance = 0;
+        if (startFilterDate.HasValue)
+        {
+            // Başlangıç tarihinden önceki tüm satış, ödeme ve manuel borçları topla
+            var previousSalesTotal = await _context.Sales
+                .Where(s => s.CustomerId == id && s.IsCompleted && s.UserId == currentUserId && s.SaleDate < startFilterDate.Value)
+                .SumAsync(s => (decimal?)s.TotalAmount) ?? 0;
+
+            var previousPaymentsTotal = await _context.Payments
+                .Where(p => p.CustomerId == id && p.UserId == currentUserId && p.PaymentDate < startFilterDate.Value)
+                .SumAsync(p => (decimal?)p.Amount) ?? 0;
+
+            var previousDebtsTotal = await _context.Debts
+                .Where(d => d.CustomerId == id && d.UserId == currentUserId && d.DebtDate < startFilterDate.Value)
+                .SumAsync(d => (decimal?)d.Amount) ?? 0;
+
+            // Açılış Bakiyesi = (Önceki Satışlar + Önceki Manuel Borçlar) - Önceki Ödemeler
+            initialBalance = (previousSalesTotal + previousDebtsTotal) - previousPaymentsTotal;
+        }
+
+        // Geçici bakiye, filtre başlangıcından önceki bakiye ile başlar.
+        var runningBalance = initialBalance;
+
+        foreach (var item in combinedList)
+        {
+            // Not: Borç (Satış ve Manuel Borç) bakiyeyi artırır, Ödeme bakiyeyi azaltır.
+            if (item.Type == "Satış" || item.Type == "Borç")
+            {
+                runningBalance += item.Amount;
+            }
+            else if (item.Type == "Ödeme")
+            {
+                runningBalance -= item.Amount;
+            }
+            item.RemainingBalance = runningBalance;
+        }
+
+        // Sonuç listesini en yeni işlem en başta olacak şekilde tersine çevirip gönder.
+        return Ok(combinedList.OrderByDescending(x => x.TransactionDate).ToList());
+    }
 
 }
