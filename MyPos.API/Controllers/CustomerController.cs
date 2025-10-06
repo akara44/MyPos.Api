@@ -507,4 +507,86 @@ public class CustomerController : ControllerBase
         return Ok(combinedList.OrderByDescending(x => x.TransactionDate).ToList());
     }
 
+    [HttpGet("ApproachingCustomerPayments")]
+    public async Task<ActionResult<IEnumerable<CustomerApproachingPaymentDto>>> GetApproachingCustomerPayments()
+    {
+        // JWT'den mevcut kullanıcının ID'sini al
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // 1. ADIM: Kalan bakiyesi (RemainingBalance) > 0 olan müşterileri çek
+        var indebtedCustomers = await _context.Customers
+            .Where(c => c.UserId == currentUserId && c.Balance > 0 && c.DueDateInDays > 0)
+            .ToListAsync();
+
+        var approachingPayments = new List<CustomerApproachingPaymentDto>();
+
+        // Vade Kontrolü: Bugün ve 30 gün sonrası arasındaki vadeleri kontrol et.
+        var dueMaxDate = DateTime.Today.AddDays(30);
+
+        foreach (var customer in indebtedCustomers)
+        {
+            // 2. ADIM: Müşterinin en son Açık Hesap Satışını veya Manuel Borcunu bul.
+            // Vade, genellikle borcun oluştuğu son tarihe göre hesaplanır.
+
+            // A. Son Açık Hesap Satışı (PaymentType == "Açık Hesap" olan)
+            var lastOpenAccountSale = await _context.Sales
+                .Where(s => s.CustomerId == customer.Id && s.UserId == currentUserId && s.PaymentType == "Açık Hesap")
+                .OrderByDescending(s => s.SaleDate)
+                .Select(s => new { Date = s.SaleDate, Code = s.SaleCode, Amount = s.TotalAmount, Type = "Satış" })
+                .FirstOrDefaultAsync();
+
+            // B. Son Manuel Borç (Debt tablosundan)
+            var lastManualDebt = await _context.Debts
+                .Where(d => d.CustomerId == customer.Id && d.UserId == currentUserId)
+                .OrderByDescending(d => d.DebtDate)
+                .Select(d => new { Date = d.DebtDate, Code = d.Note ?? "Manuel Borç", Amount = d.Amount, Type = "Borç" })
+                .FirstOrDefaultAsync();
+
+            // C. İki işlemi birleştirip en yenisini seç.
+            var allTransactions = new List<dynamic>();
+            if (lastOpenAccountSale != null) allTransactions.Add(lastOpenAccountSale);
+            if (lastManualDebt != null) allTransactions.Add(lastManualDebt);
+
+            var lastDebtTransaction = allTransactions
+                .OrderByDescending(t => t.Date)
+                .FirstOrDefault();
+
+            // 3. ADIM: Vade Kontrolü ve Ekleme
+            if (lastDebtTransaction != null)
+            {
+                // Vade tarihini hesapla: Son borç işlemi tarihi + Müşterinin Vade Günü
+                var dueDate = lastDebtTransaction.Date.AddDays(customer.DueDateInDays);
+                var daysUntilDue = (int)(dueDate.Date - DateTime.Today).TotalDays;
+
+                // Vade bugünden sonra ve 30 gün içinde mi?
+                if (daysUntilDue >= 0 && daysUntilDue <= 30)
+                {
+                    // DueDateDescription oluşturma
+                    string dueDateDescription;
+                    if (daysUntilDue == 0)
+                        dueDateDescription = "Bugün";
+                    else if (daysUntilDue == 1)
+                        dueDateDescription = "Yarın";
+                    else
+                        dueDateDescription = $"{daysUntilDue} Gün Sonra";
+
+                    approachingPayments.Add(new CustomerApproachingPaymentDto
+                    {
+                        DueDate = dueDate,
+                        DueDateDescription = dueDateDescription,
+                        CustomerName = $"{customer.CustomerName} {customer.CustomerLastName}",
+                        RemainingBalance = customer.Balance, // Müşterinin toplam kalan bakiyesi
+                        SalesCode = lastDebtTransaction.Code,
+                        TransactionAmount = lastDebtTransaction.Amount,
+                        TransactionDate = lastDebtTransaction.Date,
+                        DaysUntilDue = daysUntilDue
+                    });
+                }
+            }
+        }
+
+        // 4. ADIM: Vade tarihine göre sıralayıp dön
+        return Ok(approachingPayments.OrderBy(p => p.DueDate));
+    }
+
 }
