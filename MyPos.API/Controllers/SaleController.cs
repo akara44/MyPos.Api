@@ -472,6 +472,153 @@ public class SaleController : ControllerBase
             return StatusCode(500, "Satış tamamlanırken hata oluştu: " + ex.Message);
         }
     }
+    [HttpPost("quick")]
+    public async Task<IActionResult> QuickSale([FromBody] QuickSaleRequestDto request)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // 1. Ödeme Tipini ve Ürünleri Kontrol Et
+        var paymentType = await _context.PaymentTypes
+            .FirstOrDefaultAsync(pt => pt.Id == request.PaymentTypeId && pt.UserId == currentUserId);
+
+        if (paymentType == null)
+            return BadRequest("Seçilen ödeme tipi bulunamadı veya yetkiniz yok.");
+
+        var productIds = request.SaleItems.Select(x => x.ProductId).ToList();
+        var products = await _context.Products
+            .Where(p => productIds.Contains(p.Id) && p.UserId == currentUserId)
+            .ToDictionaryAsync(p => p.Id);
+
+        if (products.Count != productIds.Count)
+        {
+            return BadRequest("Satışa eklenen ürünlerden bazıları bulunamadı veya yetkiniz yok.");
+        }
+
+        // Stok kontrolü yapmadan önce bir işlem (transaction) başlatıyoruz.
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            // 2. Satış Nesnesini Oluştur ve Hesapla (CreateSale mantığı)
+            var sale = new Sale
+            {
+                CustomerId = request.CustomerId,
+                SaleDate = DateTime.Now,
+                IsCompleted = true, // Hızlı satış anında tamamlanır.
+                SubTotalAmount = 0,
+                DiscountAmount = 0, // Hızlı satışta indirim 0 kabul edildi.
+                MiscellaneousTotal = 0, // Hızlı satışta ek ücret 0 kabul edildi.
+                TotalAmount = 0,
+                PaymentType = paymentType.Name,
+                IsDiscountApplied = false,
+                SaleItems = new List<SaleItem>(),
+                SaleMiscellaneous = new List<SaleMiscellaneous>(),
+                SaleCode = $"QCK-{DateTime.Now:yyyyMMddHHmmss}-{Guid.NewGuid().ToString().Substring(0, 6)}",
+                TotalQuantity = 0,
+                UserId = currentUserId
+            };
+
+            // Ürünleri döngüye al, hesaplamaları yap ve stok kontrolü yap
+            foreach (var itemDto in request.SaleItems)
+            {
+                if (!products.TryGetValue(itemDto.ProductId, out var product))
+                    throw new Exception($"Ürün ID'si {itemDto.ProductId} bulunamadı."); // Bulunmama kontrolü yukarıda yapıldı, bu daha çok bir güvenlik önlemi.
+
+                if (product.Stock < itemDto.Quantity)
+                {
+                    // Stok yetersizse işlemi iptal et
+                    await transaction.RollbackAsync();
+                    return BadRequest($"Ürün '{product.Name}' için yeterli stok yok. Mevcut stok: {product.Stock}.");
+                }
+
+                var saleItem = new SaleItem
+                {
+                    ProductId = itemDto.ProductId,
+                    ProductName = product.Name,
+                    Quantity = itemDto.Quantity,
+                    UnitPrice = product.SalePrice,
+                    TotalPrice = itemDto.Quantity * product.SalePrice,
+                    Discount = 0,
+                    UserId = currentUserId
+                };
+
+                sale.SubTotalAmount += saleItem.TotalPrice;
+                sale.TotalQuantity += itemDto.Quantity;
+                sale.SaleItems.Add(saleItem);
+
+                // 3. Stok Güncelleme ve Stok Hareketini Kaydet (FinalizeSale mantığı)
+                product.Stock -= saleItem.Quantity;
+                _context.StockTransaction.Add(new StockTransaction
+                {
+                    ProductId = product.Id,
+                    QuantityChange = -saleItem.Quantity,
+                    TransactionType = "OUT",
+                    Reason = $"QuickSale:{sale.SaleCode}",
+                    Date = DateTime.Now,
+                    BalanceAfter = product.Stock,
+                    UserId = currentUserId
+                });
+                _context.Products.Update(product); // Product'ı da güncelle
+            }
+
+            sale.TotalAmount = sale.SubTotalAmount - sale.DiscountAmount + sale.MiscellaneousTotal;
+
+            // 4. Açık Hesap Kontrolü ve Müşteri Bakiye Güncelleme
+            if (request.CustomerId.HasValue && paymentType.Name.Equals("Açık Hesap", StringComparison.OrdinalIgnoreCase))
+            {
+                var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == sale.CustomerId.Value && c.UserId == currentUserId);
+
+                if (customer == null)
+                {
+                    // Müşteri ID'si gönderildi ama bulunamadıysa hata fırlat
+                    throw new Exception("Satışa bağlı müşteri bulunamadı.");
+                }
+
+                decimal yeniBakiye = customer.Balance + sale.TotalAmount;
+
+                if (customer.OpenAccountLimit.HasValue && yeniBakiye > customer.OpenAccountLimit.Value)
+                {
+                    // Limit aşımı varsa işlemi geri al ve hata döndür
+                    await transaction.RollbackAsync();
+                    return BadRequest($"Bu satış ile müşterinin borç limiti aşılamaz. Limit: {customer.OpenAccountLimit.Value:F2}, Mevcut Borç: {customer.Balance:F2}, Yeni Borç: {yeniBakiye:F2}");
+                }
+
+                customer.Balance = yeniBakiye;
+                _context.Customers.Update(customer);
+            }
+
+            // 5. Ödeme Kaydını Ekle (Opsiyonel, ayrı tablo kullanıyorsanız)
+            _context.Payments.Add(new Payment
+            {
+                SaleId = sale.SaleId,
+                CustomerId = sale.CustomerId ?? 0,
+                Amount = sale.TotalAmount,
+                PaymentDate = DateTime.Now,
+                PaymentTypeId = request.PaymentTypeId,
+                Note = paymentType.Name,
+                UserId = currentUserId
+            });
+
+
+            // 6. Satışı Kaydet ve İşlemi Tamamla
+            _context.Sales.Add(sale);
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return CreatedAtAction(nameof(GetSaleById), new { saleId = sale.SaleId }, new
+            {
+                message = "Hızlı satış başarıyla tamamlandı.",
+                saleId = sale.SaleId,
+                saleCode = sale.SaleCode,
+                totalAmount = sale.TotalAmount
+            });
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            // Loglama burada yapılmalı.
+            return StatusCode(500, "Hızlı satış tamamlanırken hata oluştu: " + ex.Message);
+        }
+    }
 }
 
 
@@ -491,4 +638,26 @@ public class SplitPaymentDto
     public string PaymentTypeName { get; set; } // "Nakit", "POS" ya da DB’den gelen isim
     public int? PaymentTypeId { get; set; }      // sadece DB’den gelenler için kullanılır
     public decimal Amount { get; set; }
+}
+public class QuickSaleItemDto
+{
+    [Required]
+    public int ProductId { get; set; }
+    [Required]
+    [Range(1, int.MaxValue)]
+    public int Quantity { get; set; }
+}
+
+public class QuickSaleRequestDto
+{
+    // Hızlı satışta indirim ve ek ücretler genelde kullanılmaz veya 0 kabul edilir.
+    // İhtiyaca göre sonradan eklenebilir.
+
+    [Required]
+    public List<QuickSaleItemDto> SaleItems { get; set; }
+
+    [Required]
+    public int PaymentTypeId { get; set; } // Hangi ödeme tipiyle kapatılacak (Nakit, Kart vb.)
+
+    public int? CustomerId { get; set; } // Müşteri zorunlu değil (anonim satış olabilir)
 }
