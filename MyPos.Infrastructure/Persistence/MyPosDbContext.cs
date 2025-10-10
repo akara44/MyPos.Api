@@ -56,8 +56,6 @@ namespace MyPos.Infrastructure.Persistence
             }
             // === EKLEDİĞİM KOD BİTİŞİ ===
             // ==============================================================================
-
-
             modelBuilder.Entity<ProductGroup>()
                 .HasOne(pg => pg.ParentGroup)
                 .WithMany(pg => pg.SubGroups)
@@ -125,5 +123,7 @@ namespace MyPos.Infrastructure.Persistence
                 .HasForeignKey(pi => pi.PurchaseInvoiceId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
+
+
     }
 }
