@@ -22,17 +22,21 @@ public class ProductReportingController : ControllerBase
         _context = context;
     }
 
-    [HttpPost("sales-report")]
-    public async Task<IActionResult> GetProductSalesReport([FromBody] ProductReportRequestDto request)
+    // POST yerine GET kullanıldı ve Body yerine Query Parametreleri eklendi
+    // Örnek Kullanım: /api/ProductReporting/sales-report?startDate=2024-01-01&endDate=2024-01-31
+    [HttpGet("sales-report")]
+    public async Task<IActionResult> GetProductSalesReport(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         // Tarih aralığı belirleme (Varsayılan: Bugün)
-        var startDate = (request.StartDate ?? DateTime.Today).Date;
+        var start = (startDate ?? DateTime.Today).Date;
         // Bitiş tarihi, o günün sonuna ayarlanır (+1 gün ve -1 milisaniye)
-        var endDate = (request.EndDate ?? DateTime.Today).Date.AddDays(1).AddMilliseconds(-1);
+        var end = (endDate ?? DateTime.Today).Date.AddDays(1).AddMilliseconds(-1);
 
-        if (startDate > endDate)
+        if (start > end)
         {
             return BadRequest("Başlangıç tarihi, bitiş tarihinden sonra olamaz.");
         }
@@ -40,7 +44,7 @@ public class ProductReportingController : ControllerBase
         // 1. İlgili tarihler arasındaki tamamlanmış satışları bul
         var relevantSales = _context.Sales
             .Where(s => s.UserId == currentUserId && s.IsCompleted == true)
-            .Where(s => s.SaleDate >= startDate && s.SaleDate <= endDate)
+            .Where(s => s.SaleDate >= start && s.SaleDate <= end)
             .Select(s => s.SaleId);
 
         // 2. Bu satışlara ait satış kalemlerini (SaleItem) ProductId bazında grupla
@@ -86,8 +90,8 @@ public class ProductReportingController : ControllerBase
                     ProductBarcode = product.Barcode,
                     ProductName = product.Name,
                     TotalQuantitySold = data.TotalQuantitySold,
-                    RemainingStock = product.Stock, // Kalan stok Product tablosundan alındı
-                    AvgPurchasePrice = product.PurchasePrice, // Ortalama yerine ürünün sabit Alış Fiyatı kullanıldı
+                    RemainingStock = product.Stock,
+                    AvgPurchasePrice = product.PurchasePrice,
                     AvgSalePrice = avgSalePrice,
                     AvgUnitProfit = avgUnitProfit,
                     TotalAmount = data.TotalAmount,
@@ -97,5 +101,88 @@ public class ProductReportingController : ControllerBase
         }
 
         return Ok(reportList);
+    }
+
+    // POST yerine GET kullanıldı ve Body yerine Query Parametreleri eklendi
+    // Örnek Kullanım: /api/ProductReporting/report-totals?startDate=2024-01-01&endDate=2024-01-31
+    [HttpGet("report-totals")]
+    public async Task<IActionResult> GetProductReportTotals(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Tarih aralığı belirleme (Varsayılan: Bugün)
+        var start = (startDate ?? DateTime.Today).Date;
+        // Bitiş tarihi, o günün sonuna ayarlanır (+1 gün ve -1 milisaniye)
+        var end = (endDate ?? DateTime.Today).Date.AddDays(1).AddMilliseconds(-1);
+
+        if (start > end)
+        {
+            return BadRequest("Başlangıç tarihi, bitiş tarihinden sonra olamaz.");
+        }
+
+        // 1. İlgili tarihler arasındaki tamamlanmış satışları bul
+        var relevantSales = _context.Sales
+            .Where(s => s.UserId == currentUserId && s.IsCompleted == true)
+            .Where(s => s.SaleDate >= start && s.SaleDate <= end)
+            .Select(s => s.SaleId);
+
+        // 2. Bu satışlara ait satış kalemlerini (SaleItem) ProductId bazında grupla ve toplamları hesapla
+        var reportData = await _context.SaleItems
+            .Where(si => relevantSales.Contains(si.SaleId))
+            .GroupBy(si => si.ProductId)
+            .Select(g => new
+            {
+                ProductId = g.Key,
+                TotalQuantitySold = g.Sum(si => si.Quantity),
+                TotalAmount = g.Sum(si => si.TotalPrice)
+            })
+            .ToListAsync();
+
+        // Rapor verisi yoksa 0'larla boş bir sonuç döndür
+        if (!reportData.Any())
+        {
+            return Ok(new ProductReportTotalsDto
+            {
+                TotalQuantity = 0,
+                TotalAmount = 0,
+                TotalProfitLoss = 0
+            });
+        }
+
+        // 3. Product'ları (Alış Fiyatı için) tek seferde çek
+        var productIds = reportData.Select(d => d.ProductId).ToList();
+
+        var products = await _context.Products
+            .Where(p => productIds.Contains(p.Id) && p.UserId == currentUserId)
+            .ToDictionaryAsync(p => p.Id);
+
+        decimal grandTotalQuantity = 0;
+        decimal grandTotalAmount = 0;
+        decimal grandTotalProfitLoss = 0;
+
+        foreach (var data in reportData)
+        {
+            if (products.TryGetValue(data.ProductId, out var product))
+            {
+                // Kar/Zarar Hesaplaması
+                var totalPurchaseCost = data.TotalQuantitySold * product.PurchasePrice;
+                var totalProfitLoss = data.TotalAmount - totalPurchaseCost;
+
+                // Genel Toplamları Güncelle
+                grandTotalQuantity += data.TotalQuantitySold;
+                grandTotalAmount += data.TotalAmount;
+                grandTotalProfitLoss += totalProfitLoss;
+            }
+        }
+
+        // 4. Toplam Sonucu DTO olarak döndür
+        return Ok(new ProductReportTotalsDto
+        {
+            TotalQuantity = grandTotalQuantity,
+            TotalAmount = grandTotalAmount,
+            TotalProfitLoss = grandTotalProfitLoss
+        });
     }
 }

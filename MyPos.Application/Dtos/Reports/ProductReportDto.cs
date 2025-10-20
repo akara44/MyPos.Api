@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MyPos.Application.Dtos.Reports;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -25,4 +26,11 @@ namespace MyPos.Application.Dtos.Reports
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
     }
+}
+
+public class ProductReportTotalsDto
+{
+    public decimal TotalQuantity { get; set; }  // Toplam Satış Miktarı
+    public decimal TotalAmount { get; set; }    // Toplam Tutar (Satış)
+    public decimal TotalProfitLoss { get; set; } // Toplam Kar/Zarar
 }
