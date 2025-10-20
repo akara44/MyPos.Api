@@ -453,6 +453,44 @@ public class SummaryController : ControllerBase
 
         return Ok(customerPayments);
     }
+    [HttpGet("daily-company-transactions")]
+    public async Task<ActionResult<IEnumerable<DailyCompanyTransactionDto>>> GetDailyCompanyTransactions()
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Sadece bugünün başlangıcını ve bitişini hesapla (UTC Karşılığı)
+        // Diğer metotlarda UTC kullanıldığı için burada da kullanılıyor.
+        var queryDate = DateTime.Today;
+        var startOfDayUtc = queryDate.ToUniversalTime();
+        var endOfDayUtc = queryDate.AddDays(1).ToUniversalTime();
+
+        // 1. O Güne Ait Tüm Firma İşlemlerini Çek
+        var dailyTransactions = await _context.CompanyTransactions
+            .Include(ct => ct.Company) // Firma adını alabilmek için
+            .Where(ct => ct.Company.UserId == currentUserId && // İşlemi yapan firmanın kullanıcıya ait olduğunu kontrol et
+                        ct.TransactionDate >= startOfDayUtc &&
+                        ct.TransactionDate < endOfDayUtc &&
+                        (ct.Type == MyPos.Domain.Entities.TransactionType.Debt ||
+                         ct.Type == MyPos.Domain.Entities.TransactionType.Payment)) // Sadece Borç ve Ödeme işlemlerini al
+            .ToListAsync();
+
+        // 2. Firmaya göre grupla ve Borç/Ödeme toplamlarını hesapla
+        var groupedTransactions = dailyTransactions
+            .GroupBy(ct => ct.CompanyId)
+            .Select(g => new DailyCompanyTransactionDto
+            {
+                CompanyId = g.Key,
+                CompanyName = g.First().Company.Name, // Grubun ilk elemanından Firma Adını al
+                TotalDebt = g.Where(ct => ct.Type == MyPos.Domain.Entities.TransactionType.Debt)
+                             .Sum(ct => ct.Amount),
+                TotalPayment = g.Where(ct => ct.Type == MyPos.Domain.Entities.TransactionType.Payment)
+                                .Sum(ct => ct.Amount)
+            })
+            .OrderBy(d => d.CompanyName)
+            .ToList();
+
+        return Ok(groupedTransactions);
+    }
 }
 
 
@@ -572,4 +610,11 @@ public class DailyCustomerPaymentDetailDto
     public string PaymentType { get; set; }
     public string Note { get; set; }
     public string Time { get; set; }
+}
+public class DailyCompanyTransactionDto
+{
+    public int CompanyId { get; set; }
+    public string CompanyName { get; set; }
+    public decimal TotalDebt { get; set; }   // Borç tutarı
+    public decimal TotalPayment { get; set; } // Ödeme tutarı
 }
