@@ -15,11 +15,11 @@ using MyPos.Application.Dtos.Reports;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class SummaryController : ControllerBase
+public class DailyReportController : ControllerBase
 {
     private readonly MyPosDbContext _context;
 
-    public SummaryController(MyPosDbContext context)
+    public DailyReportController(MyPosDbContext context)
     {
         _context = context;
     }
