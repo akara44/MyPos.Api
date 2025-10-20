@@ -29,7 +29,7 @@ namespace MyPos.Infrastructure.Persistence
         public DbSet<Sale> Sales { get; set; }
         public DbSet<SaleItem> SaleItems { get; set; }
         public DbSet<CompanyTransaction> CompanyTransactions { get; set; }
-        public DbSet<Debt> Debts { get; set; }
+        public DbSet<Debt> Debts { get; set; }  
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
