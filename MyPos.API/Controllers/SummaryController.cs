@@ -421,6 +421,38 @@ public class SummaryController : ControllerBase
 
         return Ok(result);
     }
+    [HttpGet("daily-customer-payments")]
+    public async Task<ActionResult<IEnumerable<DailyCustomerPaymentDetailDto>>> GetDailyCustomerPayments()
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Sadece bugünün başlangıcını ve bitişini hesapla (UTC Karşılığı)
+        var queryDate = DateTime.Today;
+        var startOfDayUtc = queryDate.ToUniversalTime();
+        var endOfDayUtc = queryDate.AddDays(1).ToUniversalTime();
+
+        // 1. O Güne Ait Borç Tahsilatlarını Çek
+        var customerPayments = await _context.Payments
+            .Include(p => p.Customer) // Müşteri adını alabilmek için
+            .Include(p => p.PaymentType) // Ödeme tipinin adını alabilmek için
+            .Where(p => p.UserId == currentUserId &&
+                        p.PaymentDate >= startOfDayUtc &&
+                        p.PaymentDate < endOfDayUtc &&
+                        p.SaleId == null) // NOT: Sadece borç tahsilatları (satış ödemeleri hariç)
+            .OrderByDescending(p => p.PaymentDate)
+            .Select(p => new DailyCustomerPaymentDetailDto
+            {
+                Id = p.Id,
+                CustomerName = p.Customer.CustomerName, // Customer entitisindeki isim alanını kullan
+                Amount = p.Amount,
+                PaymentType = p.PaymentType.Name, // PaymentType entitisindeki adı kullan
+                Note = p.Note,
+                Time = p.PaymentDate.ToLocalTime().ToString("HH:mm") // Yerel saate çevirip saat formatını al
+            })
+            .ToListAsync();
+
+        return Ok(customerPayments);
+    }
 }
 
 
@@ -531,4 +563,13 @@ public class RevenueSummaryDto
 public class ProductCostReportDto
 {
     public decimal TotalCostOfGoodsSold { get; set; }
-} 
+}
+public class DailyCustomerPaymentDetailDto
+{
+    public int Id { get; set; }
+    public string CustomerName { get; set; }
+    public decimal Amount { get; set; }
+    public string PaymentType { get; set; }
+    public string Note { get; set; }
+    public string Time { get; set; }
+}
