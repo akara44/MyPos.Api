@@ -2,9 +2,9 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyPos.Infrastructure.Persistence;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -17,1207 +17,1386 @@ namespace MyPos.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.19")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+                .HasAnnotation("ProductVersion", "8.0.20")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Customer", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Address")
+                    .HasMaxLength(250)
+                    .HasColumnType("character varying(250)");
 
-                    b.Property<string>("CustomerName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                b.Property<decimal>("Balance")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<string>("CustomerNote")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("City")
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.Property<string>("DueDate")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Country")
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.Property<decimal?>("OpenAccountLimit")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<string>("CustomerCode")
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("CustomerLastName")
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.Property<string>("TaxNumber")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("CustomerName")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.Property<string>("TaxOffice")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("CustomerNote")
+                    .HasColumnType("text");
 
-                    b.HasKey("Id");
+                b.Property<string>("CustomerType")
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.ToTable("Customers");
-                });
+                b.Property<decimal>("Discount")
+                    .HasColumnType("decimal(18, 2)");
+
+                b.Property<string>("District")
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
+
+                b.Property<int>("DueDateInDays")
+                    .HasColumnType("integer");
+
+                b.Property<string>("Email")
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
+
+                b.Property<decimal?>("OpenAccountLimit")
+                    .HasColumnType("decimal(18, 2)");
+
+                b.Property<string>("Phone")
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
+
+                b.Property<string>("PostalCode")
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
+
+                b.Property<int>("PriceType")
+                    .HasColumnType("integer");
+
+                b.Property<string>("TaxNumber")
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
+
+                b.Property<string>("TaxOffice")
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
+
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
+
+                b.HasKey("Id");
+
+                b.ToTable("Customers");
+            });
+
+            modelBuilder.Entity("Debt", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
+
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                b.Property<decimal>("Amount")
+                    .HasColumnType("decimal(18, 2)");
+
+                b.Property<int>("CustomerId")
+                    .HasColumnType("integer");
+
+                b.Property<DateTime>("DebtDate")
+                    .HasColumnType("timestamp with time zone");
+
+                b.Property<string>("Note")
+                    .HasMaxLength(500)
+                    .HasColumnType("character varying(500)");
+
+                b.Property<int?>("SaleId")
+                    .HasColumnType("integer");
+
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
+
+                b.HasKey("Id");
+
+                b.HasIndex("CustomerId");
+
+                b.ToTable("Debts");
+            });
 
             modelBuilder.Entity("Expense", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Amount")
+                    .HasColumnType("numeric");
 
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("Date")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Description")
+                    .HasColumnType("text");
 
-                    b.Property<string>("PaymentType")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("PaymentType")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<int>("TypeId")
-                        .HasColumnType("int");
+                b.Property<int>("TypeId")
+                    .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("TypeId");
+                b.HasKey("Id");
 
-                    b.ToTable("Expenses");
-                });
+                b.HasIndex("TypeId");
+
+                b.ToTable("Expenses");
+            });
 
             modelBuilder.Entity("ExpenseIncomeType", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.ToTable("ExpenseIncomeTypes");
-                });
+                b.HasKey("Id");
+
+                b.ToTable("ExpenseIncomeTypes");
+            });
 
             modelBuilder.Entity("Income", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Amount")
+                    .HasColumnType("numeric");
 
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("Date")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Description")
+                    .HasColumnType("text");
 
-                    b.Property<string>("PaymentType")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("PaymentType")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<int>("TypeId")
-                        .HasColumnType("int");
+                b.Property<int>("TypeId")
+                    .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("TypeId");
+                b.HasKey("Id");
 
-                    b.ToTable("Incomes");
-                });
+                b.HasIndex("TypeId");
+
+                b.ToTable("Incomes");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.Company", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                b.Property<string>("Address")
+                    .IsRequired()
+                    .HasMaxLength(500)
+                    .HasColumnType("character varying(500)");
 
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("CreatedDate")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("MobilePhone")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                b.Property<string>("MobilePhone")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<string>("OfficialName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                b.Property<string>("OfficialName")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                b.Property<string>("Phone")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.Property<string>("TaxNumber")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("TaxNumber")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<string>("TaxOffice")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                b.Property<string>("TaxOffice")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.Property<int?>("TermDays")
-                        .HasColumnType("int");
+                b.Property<int?>("TermDays")
+                    .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.ToTable("Company");
-                });
+                b.HasKey("Id");
+
+                b.ToTable("Company");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.CompanyTransaction", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Amount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
+                b.Property<int>("CompanyId")
+                    .HasColumnType("integer");
 
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("CreatedDate")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                b.Property<string>("Description")
+                    .HasMaxLength(500)
+                    .HasColumnType("character varying(500)");
 
-                    b.Property<int?>("PaymentTypeId")
-                        .HasColumnType("int");
+                b.Property<int?>("PaymentTypeId")
+                    .HasColumnType("integer");
 
-                    b.Property<DateTime>("TransactionDate")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("TransactionDate")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("int");
+                b.Property<int>("Type")
+                    .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("CompanyId");
+                b.HasKey("Id");
 
-                    b.HasIndex("PaymentTypeId");
+                b.HasIndex("CompanyId");
 
-                    b.ToTable("CompanyTransactions");
-                });
+                b.HasIndex("PaymentTypeId");
+
+                b.ToTable("CompanyTransactions");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.PaymentType", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CashRegisterType")
-                        .HasColumnType("int");
+                b.Property<int>("CashRegisterType")
+                    .HasColumnType("integer");
 
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("CreatedDate")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.ToTable("PaymentTypes");
-                });
+                b.HasKey("Id");
+
+                b.ToTable("PaymentTypes");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.Product", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Barcode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("Barcode")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<int>("CriticalStockLevel")
-                        .HasColumnType("int");
+                b.Property<int>("CriticalStockLevel")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("ImageUrl")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("ImageUrl")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                b.Property<bool>("IsActive")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("OriginCountry")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.Property<int?>("ProductGroupId")
-                        .HasColumnType("int");
+                b.Property<string>("OriginCountry")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<decimal>("PurchasePrice")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<int?>("ProductGroupId")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("SalePageList")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<decimal>("PurchasePrice")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("SalePrice")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<string>("SalePageList")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<int>("Stock")
-                        .HasColumnType("int");
+                b.Property<decimal>("SalePrice")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("TaxRate")
-                        .HasColumnType("int");
+                b.Property<int>("Stock")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                b.Property<int>("TaxRate")
+                    .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                b.Property<string>("Unit")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.HasIndex("ProductGroupId");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.ToTable("Products");
-                });
+                b.HasKey("Id");
+
+                b.HasIndex("ProductGroupId");
+
+                b.ToTable("Products");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.ProductGroup", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<int?>("ParentGroupId")
-                        .HasColumnType("int");
+                b.Property<int?>("ParentGroupId")
+                    .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("ParentGroupId");
+                b.HasKey("Id");
 
-                    b.ToTable("ProductGroups");
-                });
+                b.HasIndex("ParentGroupId");
+
+                b.ToTable("ProductGroups");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.ProductVariant", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Barcode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("Barcode")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<int>("CriticalStockLevel")
-                        .HasColumnType("int");
+                b.Property<int>("CriticalStockLevel")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("ImageUrl")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("ImageUrl")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
+                b.Property<int>("ProductId")
+                    .HasColumnType("integer");
 
-                    b.Property<decimal>("PurchasePrice")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("PurchasePrice")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("SalePageList")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("SalePageList")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<decimal>("SalePrice")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("SalePrice")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("Stock")
-                        .HasColumnType("int");
+                b.Property<int>("Stock")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("TaxRate")
-                        .HasColumnType("int");
+                b.Property<int>("TaxRate")
+                    .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("ProductId");
+                b.HasKey("Id");
 
-                    b.ToTable("ProductVariants");
-                });
+                b.HasIndex("ProductId");
+
+                b.ToTable("ProductVariants");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.ProductVariantValue", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("ProductVariantId")
-                        .HasColumnType("int");
+                b.Property<int>("ProductVariantId")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("VariantValueId")
-                        .HasColumnType("int");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasKey("Id");
+                b.Property<int>("VariantValueId")
+                    .HasColumnType("integer");
 
-                    b.HasIndex("ProductVariantId");
+                b.HasKey("Id");
 
-                    b.HasIndex("VariantValueId");
+                b.HasIndex("ProductVariantId");
 
-                    b.ToTable("ProductVariantValues");
-                });
+                b.HasIndex("VariantValueId");
+
+                b.ToTable("ProductVariantValues");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.PurchaseInvoice", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("CompanyId")
-                        .HasColumnType("int");
+                b.Property<int?>("CompanyId")
+                    .HasColumnType("integer");
 
-                    b.Property<bool>("DoesNotAffectProfit")
-                        .HasColumnType("bit");
+                b.Property<bool>("DoesNotAffectProfit")
+                    .HasColumnType("boolean");
 
-                    b.Property<decimal>("GrandTotal")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("GrandTotal")
+                    .HasColumnType("numeric");
 
-                    b.Property<DateTime>("InvoiceDate")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("InvoiceDate")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("InvoiceNumber")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("InvoiceNumber")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<int?>("PaymentTypeId")
-                        .HasColumnType("int");
+                b.Property<int?>("PaymentTypeId")
+                    .HasColumnType("integer");
 
-                    b.Property<decimal>("TotalAmount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalAmount")
+                    .HasColumnType("numeric");
 
-                    b.Property<decimal>("TotalDiscount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalDiscount")
+                    .HasColumnType("numeric");
 
-                    b.Property<decimal>("TotalTaxAmount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalTaxAmount")
+                    .HasColumnType("numeric");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("CompanyId");
+                b.HasKey("Id");
 
-                    b.HasIndex("PaymentTypeId");
+                b.HasIndex("CompanyId");
 
-                    b.ToTable("PurchaseInvoices");
-                });
+                b.HasIndex("PaymentTypeId");
+
+                b.ToTable("PurchaseInvoices");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.PurchaseInvoiceItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Barcode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Barcode")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<decimal?>("DiscountRate1")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal?>("DiscountRate1")
+                    .HasColumnType("numeric");
 
-                    b.Property<decimal?>("DiscountRate2")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal?>("DiscountRate2")
+                    .HasColumnType("numeric");
 
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
+                b.Property<int>("ProductId")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("ProductName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("ProductName")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<int>("PurchaseInvoiceId")
-                        .HasColumnType("int");
+                b.Property<int>("PurchaseInvoiceId")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int");
+                b.Property<int>("Quantity")
+                    .HasColumnType("integer");
 
-                    b.Property<decimal>("TaxAmount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TaxAmount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("TaxRate")
-                        .HasColumnType("int");
+                b.Property<int>("TaxRate")
+                    .HasColumnType("integer");
 
-                    b.Property<decimal?>("TotalDiscountAmount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal?>("TotalDiscountAmount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("TotalPrice")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalPrice")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("UnitPrice")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("ProductId");
+                b.HasKey("Id");
 
-                    b.HasIndex("PurchaseInvoiceId");
+                b.HasIndex("ProductId");
 
-                    b.ToTable("PurchaseInvoiceItems");
-                });
+                b.HasIndex("PurchaseInvoiceId");
+
+                b.ToTable("PurchaseInvoiceItems");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.StockTransaction", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("BalanceAfter")
-                        .HasColumnType("int");
+                b.Property<int>("BalanceAfter")
+                    .HasColumnType("integer");
 
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("Date")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
+                b.Property<int>("ProductId")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("QuantityChange")
-                        .HasColumnType("int");
+                b.Property<int>("QuantityChange")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("Reason")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<string>("TransactionType")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                b.Property<string>("TransactionType")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("ProductId");
+                b.HasKey("Id");
 
-                    b.ToTable("StockTransaction");
-                });
+                b.HasIndex("ProductId");
+
+                b.ToTable("StockTransaction");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.User", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("City")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("City")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("CompanyName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("CompanyName")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Email")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("FirstName")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("LastName")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<byte[]>("PasswordHash")
-                        .HasColumnType("varbinary(max)");
+                b.Property<byte[]>("PasswordHash")
+                    .HasColumnType("bytea");
 
-                    b.Property<byte[]>("PasswordSalt")
-                        .HasColumnType("varbinary(max)");
+                b.Property<byte[]>("PasswordSalt")
+                    .HasColumnType("bytea");
 
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Phone")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Role")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.ToTable("Users");
-                });
+                b.ToTable("Users");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.VariantType", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.ToTable("VariantTypes");
-                });
+                b.HasKey("Id");
+
+                b.ToTable("VariantTypes");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.VariantValue", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<int>("VariantTypeId")
-                        .HasColumnType("int");
+                b.Property<string>("Value")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.HasKey("Id");
+                b.Property<int>("VariantTypeId")
+                    .HasColumnType("integer");
 
-                    b.HasIndex("VariantTypeId");
+                b.HasKey("Id");
 
-                    b.ToTable("VariantValues");
-                });
+                b.HasIndex("VariantTypeId");
+
+                b.ToTable("VariantValues");
+            });
 
             modelBuilder.Entity("Order", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("CustomerId")
-                        .HasColumnType("int");
+                b.Property<int?>("CustomerId")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("OrderCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("OrderCode")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<DateTime>("OrderDate")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("OrderDate")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("OrderNote")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                b.Property<string>("OrderNote")
+                    .IsRequired()
+                    .HasMaxLength(500)
+                    .HasColumnType("character varying(500)");
 
-                    b.Property<string>("PaymentType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("PaymentType")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<int?>("PersonnelId")
-                        .HasColumnType("int");
+                b.Property<int?>("PersonnelId")
+                    .HasColumnType("integer");
 
-                    b.Property<decimal>("RemainingDebt")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("RemainingDebt")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<decimal>("TotalAmount")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("TotalAmount")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<decimal>("TotalDiscount")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("TotalDiscount")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.HasKey("Id");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("CustomerId");
+                b.HasKey("Id");
 
-                    b.ToTable("Orders");
-                });
+                b.HasIndex("CustomerId");
+
+                b.ToTable("Orders");
+            });
 
             modelBuilder.Entity("Payment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("Amount")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<int>("CustomerId")
-                        .HasColumnType("int");
+                b.Property<int>("CustomerId")
+                    .HasColumnType("integer");
 
-                    b.Property<DateTime>("PaymentDate")
-                        .HasColumnType("datetime2");
+                b.Property<string>("Note")
+                    .HasMaxLength(500)
+                    .HasColumnType("character varying(500)");
 
-                    b.Property<string>("PaymentTypeName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<DateTime>("PaymentDate")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("SaleId")
-                        .HasColumnType("int");
+                b.Property<int>("PaymentTypeId")
+                    .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                b.Property<int?>("SaleId")
+                    .HasColumnType("integer");
 
-                    b.HasIndex("CustomerId");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("SaleId");
+                b.HasKey("Id");
 
-                    b.ToTable("Payments");
-                });
+                b.HasIndex("CustomerId");
+
+                b.HasIndex("PaymentTypeId");
+
+                b.ToTable("Payments");
+            });
 
             modelBuilder.Entity("Personnel", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<bool>("AddOrUpdateProduct")
-                        .HasColumnType("bit");
+                b.Property<bool>("AddOrUpdateProduct")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Address")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("BloodType")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("BloodType")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Code")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<decimal>("CurrentSalary")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("CurrentSalary")
+                    .HasColumnType("numeric");
 
-                    b.Property<bool>("DailyReport")
-                        .HasColumnType("bit");
+                b.Property<bool>("DailyReport")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("DeleteProduct")
-                        .HasColumnType("bit");
+                b.Property<bool>("DeleteProduct")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("DiscountCurrency")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("DiscountCurrency")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("EmergencyContact")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("EmergencyContact")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<bool>("HistoricalReport")
-                        .HasColumnType("bit");
+                b.Property<bool>("HistoricalReport")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("IBAN")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("IBAN")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("IdentityNumber")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("IdentityNumber")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("ImagePath")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("ImagePath")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
+                b.Property<bool>("IsActive")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("ManageCompany")
-                        .HasColumnType("bit");
+                b.Property<bool>("ManageCompany")
+                    .HasColumnType("boolean");
 
-                    b.Property<decimal>("MaxDiscount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("MaxDiscount")
+                    .HasColumnType("numeric");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("Notes")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Notes")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("PasswordHash")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Phone")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<bool>("PurchaseInvoiceCreate")
-                        .HasColumnType("bit");
+                b.Property<bool>("PurchaseInvoiceCreate")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("PurchaseInvoiceFullAccess")
-                        .HasColumnType("bit");
+                b.Property<bool>("PurchaseInvoiceFullAccess")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Role")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<bool>("SalesDiscount")
-                        .HasColumnType("bit");
+                b.Property<bool>("SalesDiscount")
+                    .HasColumnType("boolean");
 
-                    b.Property<decimal>("StartingSalary")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("StartingSalary")
+                    .HasColumnType("numeric");
 
-                    b.Property<bool>("StockCount")
-                        .HasColumnType("bit");
+                b.Property<bool>("StockCount")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("ViewCustomer")
-                        .HasColumnType("bit");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<bool>("ViewIncomeExpense")
-                        .HasColumnType("bit");
+                b.Property<bool>("ViewCustomer")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("ViewTurnoverInReports")
-                        .HasColumnType("bit");
+                b.Property<bool>("ViewIncomeExpense")
+                    .HasColumnType("boolean");
 
-                    b.HasKey("Id");
+                b.Property<bool>("ViewTurnoverInReports")
+                    .HasColumnType("boolean");
 
-                    b.ToTable("Personnel");
-                });
+                b.HasKey("Id");
+
+                b.ToTable("Personnel");
+            });
 
             modelBuilder.Entity("Sale", b =>
-                {
-                    b.Property<int>("SaleId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("SaleId")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SaleId"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SaleId"));
 
-                    b.Property<int?>("CustomerId")
-                        .HasColumnType("int");
+                b.Property<int?>("CustomerId")
+                    .HasColumnType("integer");
 
-                    b.Property<decimal>("DiscountAmount")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("DiscountAmount")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<string>("DiscountType")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("DiscountType")
+                    .HasColumnType("text");
 
-                    b.Property<decimal>("DiscountValue")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("DiscountValue")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<bool>("IsCompleted")
-                        .HasColumnType("bit");
+                b.Property<bool>("IsCompleted")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("IsDiscountApplied")
-                        .HasColumnType("bit");
+                b.Property<bool>("IsDiscountApplied")
+                    .HasColumnType("boolean");
 
-                    b.Property<decimal>("MiscellaneousTotal")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("MiscellaneousTotal")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<string>("PaymentType")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("PaymentType")
+                    .HasColumnType("text");
 
-                    b.Property<string>("SaleCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("SaleCode")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<DateTime>("SaleDate")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("SaleDate")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<decimal>("SubTotalAmount")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("SubTotalAmount")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<decimal>("TotalAmount")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("TotalAmount")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<int>("TotalQuantity")
-                        .HasColumnType("int");
+                b.Property<int>("TotalQuantity")
+                    .HasColumnType("integer");
 
-                    b.HasKey("SaleId");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("CustomerId");
+                b.HasKey("SaleId");
 
-                    b.ToTable("Sales");
-                });
+                b.HasIndex("CustomerId");
+
+                b.ToTable("Sales");
+            });
 
             modelBuilder.Entity("SaleItem", b =>
-                {
-                    b.Property<int>("SaleItemId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("SaleItemId")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SaleItemId"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SaleItemId"));
 
-                    b.Property<decimal>("Discount")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("Discount")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
+                b.Property<int>("ProductId")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("ProductName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("ProductName")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int");
+                b.Property<int>("Quantity")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("SaleId")
-                        .HasColumnType("int");
+                b.Property<int>("SaleId")
+                    .HasColumnType("integer");
 
-                    b.Property<decimal>("TotalPrice")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("TotalPrice")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("UnitPrice")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.HasKey("SaleItemId");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("ProductId");
+                b.HasKey("SaleItemId");
 
-                    b.HasIndex("SaleId");
+                b.HasIndex("ProductId");
 
-                    b.ToTable("SaleItems");
-                });
+                b.HasIndex("SaleId");
+
+                b.ToTable("SaleItems");
+            });
 
             modelBuilder.Entity("SaleMiscellaneous", b =>
-                {
-                    b.Property<int>("SaleMiscellaneousId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("SaleMiscellaneousId")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SaleMiscellaneousId"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SaleMiscellaneousId"));
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18, 2)");
+                b.Property<decimal>("Amount")
+                    .HasColumnType("decimal(18, 2)");
 
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("CreatedDate")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("Description")
+                    .IsRequired()
+                    .HasMaxLength(200)
+                    .HasColumnType("character varying(200)");
 
-                    b.Property<int>("SaleId")
-                        .HasColumnType("int");
+                b.Property<int>("SaleId")
+                    .HasColumnType("integer");
 
-                    b.HasKey("SaleMiscellaneousId");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasIndex("SaleId");
+                b.HasKey("SaleMiscellaneousId");
 
-                    b.ToTable("SaleMiscellaneous");
-                });
+                b.HasIndex("SaleId");
+
+                b.ToTable("SaleMiscellaneous");
+            });
+
+            modelBuilder.Entity("Debt", b =>
+            {
+                b.HasOne("Customer", "Customer")
+                    .WithMany()
+                    .HasForeignKey("CustomerId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Customer");
+            });
 
             modelBuilder.Entity("Expense", b =>
-                {
-                    b.HasOne("ExpenseIncomeType", "Type")
-                        .WithMany()
-                        .HasForeignKey("TypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("ExpenseIncomeType", "Type")
+                    .WithMany()
+                    .HasForeignKey("TypeId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("Type");
-                });
+                b.Navigation("Type");
+            });
 
             modelBuilder.Entity("Income", b =>
-                {
-                    b.HasOne("ExpenseIncomeType", "Type")
-                        .WithMany()
-                        .HasForeignKey("TypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("ExpenseIncomeType", "Type")
+                    .WithMany()
+                    .HasForeignKey("TypeId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("Type");
-                });
+                b.Navigation("Type");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.CompanyTransaction", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.Company", "Company")
-                        .WithMany()
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("MyPos.Domain.Entities.Company", "Company")
+                    .WithMany()
+                    .HasForeignKey("CompanyId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("MyPos.Domain.Entities.PaymentType", "PaymentType")
-                        .WithMany()
-                        .HasForeignKey("PaymentTypeId");
+                b.HasOne("MyPos.Domain.Entities.PaymentType", "PaymentType")
+                    .WithMany()
+                    .HasForeignKey("PaymentTypeId");
 
-                    b.Navigation("Company");
+                b.Navigation("Company");
 
-                    b.Navigation("PaymentType");
-                });
+                b.Navigation("PaymentType");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.Product", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.ProductGroup", "ProductGroup")
-                        .WithMany()
-                        .HasForeignKey("ProductGroupId")
-                        .OnDelete(DeleteBehavior.Restrict);
+            {
+                b.HasOne("MyPos.Domain.Entities.ProductGroup", "ProductGroup")
+                    .WithMany()
+                    .HasForeignKey("ProductGroupId")
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("ProductGroup");
-                });
+                b.Navigation("ProductGroup");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.ProductGroup", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.ProductGroup", "ParentGroup")
-                        .WithMany("SubGroups")
-                        .HasForeignKey("ParentGroupId")
-                        .OnDelete(DeleteBehavior.Restrict);
+            {
+                b.HasOne("MyPos.Domain.Entities.ProductGroup", "ParentGroup")
+                    .WithMany("SubGroups")
+                    .HasForeignKey("ParentGroupId")
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("ParentGroup");
-                });
+                b.Navigation("ParentGroup");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.ProductVariant", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.Product", "Product")
-                        .WithMany("ProductVariants")
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("MyPos.Domain.Entities.Product", "Product")
+                    .WithMany("ProductVariants")
+                    .HasForeignKey("ProductId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("Product");
-                });
+                b.Navigation("Product");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.ProductVariantValue", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.ProductVariant", "ProductVariant")
-                        .WithMany("ProductVariantValues")
-                        .HasForeignKey("ProductVariantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("MyPos.Domain.Entities.ProductVariant", "ProductVariant")
+                    .WithMany("ProductVariantValues")
+                    .HasForeignKey("ProductVariantId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("MyPos.Domain.Entities.VariantValue", "VariantValue")
-                        .WithMany()
-                        .HasForeignKey("VariantValueId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                b.HasOne("MyPos.Domain.Entities.VariantValue", "VariantValue")
+                    .WithMany()
+                    .HasForeignKey("VariantValueId")
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .IsRequired();
 
-                    b.Navigation("ProductVariant");
+                b.Navigation("ProductVariant");
 
-                    b.Navigation("VariantValue");
-                });
+                b.Navigation("VariantValue");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.PurchaseInvoice", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.Company", "Company")
-                        .WithMany()
-                        .HasForeignKey("CompanyId");
+            {
+                b.HasOne("MyPos.Domain.Entities.Company", "Company")
+                    .WithMany()
+                    .HasForeignKey("CompanyId");
 
-                    b.HasOne("MyPos.Domain.Entities.PaymentType", "PaymentType")
-                        .WithMany("PurchaseInvoices")
-                        .HasForeignKey("PaymentTypeId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                b.HasOne("MyPos.Domain.Entities.PaymentType", "PaymentType")
+                    .WithMany("PurchaseInvoices")
+                    .HasForeignKey("PaymentTypeId")
+                    .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("Company");
+                b.Navigation("Company");
 
-                    b.Navigation("PaymentType");
-                });
+                b.Navigation("PaymentType");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.PurchaseInvoiceItem", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("MyPos.Domain.Entities.Product", "Product")
+                    .WithMany()
+                    .HasForeignKey("ProductId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("MyPos.Domain.Entities.PurchaseInvoice", "PurchaseInvoice")
-                        .WithMany("PurchaseInvoiceItems")
-                        .HasForeignKey("PurchaseInvoiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                b.HasOne("MyPos.Domain.Entities.PurchaseInvoice", "PurchaseInvoice")
+                    .WithMany("PurchaseInvoiceItems")
+                    .HasForeignKey("PurchaseInvoiceId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("Product");
+                b.Navigation("Product");
 
-                    b.Navigation("PurchaseInvoice");
-                });
+                b.Navigation("PurchaseInvoice");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.StockTransaction", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("MyPos.Domain.Entities.Product", "Product")
+                    .WithMany()
+                    .HasForeignKey("ProductId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("Product");
-                });
+                b.Navigation("Product");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.VariantValue", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.VariantType", "VariantType")
-                        .WithMany("VariantValues")
-                        .HasForeignKey("VariantTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+            {
+                b.HasOne("MyPos.Domain.Entities.VariantType", "VariantType")
+                    .WithMany("VariantValues")
+                    .HasForeignKey("VariantTypeId")
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .IsRequired();
 
-                    b.Navigation("VariantType");
-                });
+                b.Navigation("VariantType");
+            });
 
             modelBuilder.Entity("Order", b =>
-                {
-                    b.HasOne("Customer", "Customer")
-                        .WithMany("Orders")
-                        .HasForeignKey("CustomerId");
+            {
+                b.HasOne("Customer", "Customer")
+                    .WithMany("Orders")
+                    .HasForeignKey("CustomerId");
 
-                    b.Navigation("Customer");
-                });
+                b.Navigation("Customer");
+            });
 
             modelBuilder.Entity("Payment", b =>
-                {
-                    b.HasOne("Customer", "Customer")
-                        .WithMany("Payments")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("Customer", "Customer")
+                    .WithMany("Payments")
+                    .HasForeignKey("CustomerId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("Sale", "Sale")
-                        .WithMany()
-                        .HasForeignKey("SaleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                b.HasOne("MyPos.Domain.Entities.PaymentType", "PaymentType")
+                    .WithMany()
+                    .HasForeignKey("PaymentTypeId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("Customer");
+                b.Navigation("Customer");
 
-                    b.Navigation("Sale");
-                });
+                b.Navigation("PaymentType");
+            });
 
             modelBuilder.Entity("Sale", b =>
-                {
-                    b.HasOne("Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId");
+            {
+                b.HasOne("Customer", "Customer")
+                    .WithMany()
+                    .HasForeignKey("CustomerId");
 
-                    b.Navigation("Customer");
-                });
+                b.Navigation("Customer");
+            });
 
             modelBuilder.Entity("SaleItem", b =>
-                {
-                    b.HasOne("MyPos.Domain.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("MyPos.Domain.Entities.Product", "Product")
+                    .WithMany()
+                    .HasForeignKey("ProductId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("Sale", "Sale")
-                        .WithMany("SaleItems")
-                        .HasForeignKey("SaleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                b.HasOne("Sale", "Sale")
+                    .WithMany("SaleItems")
+                    .HasForeignKey("SaleId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("Product");
+                b.Navigation("Product");
 
-                    b.Navigation("Sale");
-                });
+                b.Navigation("Sale");
+            });
 
             modelBuilder.Entity("SaleMiscellaneous", b =>
-                {
-                    b.HasOne("Sale", "Sale")
-                        .WithMany("SaleMiscellaneous")
-                        .HasForeignKey("SaleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("Sale", "Sale")
+                    .WithMany("SaleMiscellaneous")
+                    .HasForeignKey("SaleId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("Sale");
-                });
+                b.Navigation("Sale");
+            });
 
             modelBuilder.Entity("Customer", b =>
-                {
-                    b.Navigation("Orders");
+            {
+                b.Navigation("Orders");
 
-                    b.Navigation("Payments");
-                });
+                b.Navigation("Payments");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.PaymentType", b =>
-                {
-                    b.Navigation("PurchaseInvoices");
-                });
+            {
+                b.Navigation("PurchaseInvoices");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.Product", b =>
-                {
-                    b.Navigation("ProductVariants");
-                });
+            {
+                b.Navigation("ProductVariants");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.ProductGroup", b =>
-                {
-                    b.Navigation("SubGroups");
-                });
+            {
+                b.Navigation("SubGroups");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.ProductVariant", b =>
-                {
-                    b.Navigation("ProductVariantValues");
-                });
+            {
+                b.Navigation("ProductVariantValues");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.PurchaseInvoice", b =>
-                {
-                    b.Navigation("PurchaseInvoiceItems");
-                });
+            {
+                b.Navigation("PurchaseInvoiceItems");
+            });
 
             modelBuilder.Entity("MyPos.Domain.Entities.VariantType", b =>
-                {
-                    b.Navigation("VariantValues");
-                });
+            {
+                b.Navigation("VariantValues");
+            });
 
             modelBuilder.Entity("Sale", b =>
-                {
-                    b.Navigation("SaleItems");
+            {
+                b.Navigation("SaleItems");
 
-                    b.Navigation("SaleMiscellaneous");
-                });
+                b.Navigation("SaleMiscellaneous");
+            });
 #pragma warning restore 612, 618
         }
     }

@@ -42,5 +42,6 @@ namespace MyPos.Domain.Entities
 
         // Bu varyantın sahip olduğu varyant değerleri (Renk: Mavi, Beden: L gibi)
         public ICollection<ProductVariantValue> ProductVariantValues { get; set; } = new List<ProductVariantValue>();
+        public string UserId { get; set; }
     }
 }

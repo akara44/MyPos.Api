@@ -31,5 +31,6 @@ namespace MyPos.Domain.Entities
         public PaymentType? PaymentType { get; set; }
 
         public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public string UserId { get; set; }
     }
 }

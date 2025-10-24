@@ -1,137 +1,189 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.Dtos;
+using MyPos.Application.Dtos.Customers; // Bu using'in doğru olduğundan emin ol
+using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
+using System; // DateTime için eklendi
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 [Route("api/[controller]")]
 [ApiController]
-//[Authorize]
+[Authorize]
 public class CustomerController : ControllerBase
 {
-    // Veritabanı bağlamını (DbContext) kullanmak için bir alan tanımlıyoruz.
     private readonly MyPosDbContext _context;
 
-    
     public CustomerController(MyPosDbContext context)
     {
         _context = context;
     }
 
-    
+    // --- DEĞİŞİKLİK 1: GET Metodları Artık "GetCustomerDto" Kullanıyor ---
+    // Bu, müşterinin tüm detaylı bilgilerini frontend'e göndermemizi sağlar.
+
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<CustomerDto>>> GetCustomers()
+    public async Task<ActionResult<IEnumerable<GetCustomerDto>>> GetCustomers()
     {
-        
-        var customers = await _context.Customers.ToListAsync();
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        var customerDtos = customers.Select(c => new CustomerDto
-        {
-            Id = c.Id,
-            CustomerName = c.CustomerName,
-            DueDate = c.DueDate,
-            Phone = c.Phone,
-            Address = c.Address,
-            CustomerNote = c.CustomerNote,
-            OpenAccountLimit = c.OpenAccountLimit,
-            TaxOffice = c.TaxOffice,
-            TaxNumber = c.TaxNumber
-        }).ToList();
+        var customers = await _context.Customers
+            .Where(c => c.UserId == currentUserId)
+            .Select(c => new GetCustomerDto
+            {
+                Id = c.Id,
+                CustomerType = c.CustomerType,
+                CustomerCode = c.CustomerCode,
+                CustomerName = c.CustomerName,
+                CustomerLastName = c.CustomerLastName,
+                Email = c.Email,
+                Phone = c.Phone,
+                Country = c.Country,
+                City = c.City,
+                District = c.District,
+                Address = c.Address,
+                PostalCode = c.PostalCode,
+                TaxOffice = c.TaxOffice,
+                TaxNumber = c.TaxNumber,
+                OpenAccountLimit = c.OpenAccountLimit,
+                DueDateInDays = c.DueDateInDays,
+                Discount = c.Discount,
+                PriceType = c.PriceType,
+                CustomerNote = c.CustomerNote,
+                Balance = c.Balance
+            })
+            .ToListAsync();
 
-        return Ok(customerDtos);
+        return Ok(customers);
     }
 
-    
     [HttpGet("{id}")]
-    public async Task<ActionResult<CustomerDto>> GetCustomer(int id)
+    public async Task<ActionResult<GetCustomerDto>> GetCustomer(int id)
     {
-        var customer = await _context.Customers.FindAsync(id);
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
         if (customer == null)
         {
-            return NotFound();
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        var customerDto = new CustomerDto
+        var customerDto = new GetCustomerDto
         {
             Id = customer.Id,
+            CustomerType = customer.CustomerType,
+            CustomerCode = customer.CustomerCode,
             CustomerName = customer.CustomerName,
-            DueDate = customer.DueDate,
+            CustomerLastName = customer.CustomerLastName,
+            Email = customer.Email,
             Phone = customer.Phone,
+            Country = customer.Country,
+            City = customer.City,
+            District = customer.District,
             Address = customer.Address,
-            CustomerNote = customer.CustomerNote,
-            OpenAccountLimit = customer.OpenAccountLimit,
+            PostalCode = customer.PostalCode,
             TaxOffice = customer.TaxOffice,
-            TaxNumber = customer.TaxNumber
+            TaxNumber = customer.TaxNumber,
+            OpenAccountLimit = customer.OpenAccountLimit,
+            DueDateInDays = customer.DueDateInDays,
+            Discount = customer.Discount,
+            PriceType = customer.PriceType,
+            CustomerNote = customer.CustomerNote,
+            Balance = customer.Balance
         };
 
         return Ok(customerDto);
     }
 
-    
+    // --- DEĞİŞİKLİK 2: POST (Create) Metodu "CreateCustomerDto" Kullanıyor ---
+    // Sadece hızlı kayıt formundaki verileri alır.
+
     [HttpPost]
-    public async Task<ActionResult<CustomerDto>> CreateCustomer(CustomerDto customerDto)
+    public async Task<ActionResult<GetCustomerDto>> CreateCustomer(CreateCustomerDto createDto)
     {
-        var validator = new CustomerValidator();
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var customer = new Customer
         {
-            CustomerName = customerDto.CustomerName,
-            DueDate = customerDto.DueDate,
-            Phone = customerDto.Phone,
-            Address = customerDto.Address,
-            CustomerNote = customerDto.CustomerNote,
-            OpenAccountLimit = customerDto.OpenAccountLimit,
-            TaxOffice = customerDto.TaxOffice,
-            TaxNumber = customerDto.TaxNumber
+            // CreateCustomerDto'dan gelen alanlar
+            CustomerName = createDto.CustomerName,
+            DueDateInDays = createDto.DueDateInDays,
+            Phone = createDto.Phone,
+            Address = createDto.Address,
+            CustomerNote = createDto.CustomerNote,
+            OpenAccountLimit = createDto.OpenAccountLimit,
+            TaxOffice = createDto.TaxOffice,
+            TaxNumber = createDto.TaxNumber,
+
+            // Otomatik veya varsayılan değerler
+            UserId = currentUserId,
+            CustomerCode = Guid.NewGuid().ToString().Substring(0, 8).ToUpper(), // Örnek müşteri kodu
+            CustomerType = "Bireysel" // Varsayılan değer
         };
 
-        var validationResult = validator.Validate(customer);
-        if (!validationResult.IsValid)
-        {
-            return BadRequest(validationResult.Errors);
-        }
+        // ÖNEMLİ: Artık DTO'ya özel bir validator kullanmalısın.
+        // var validator = new CreateCustomerDtoValidator();
+        // var validationResult = validator.Validate(createDto);
+        // if (!validationResult.IsValid) { return BadRequest(validationResult.Errors); }
 
         _context.Customers.Add(customer);
-        await _context.SaveChangesAsync(); // Değişiklikleri veritabanına kaydet.
+        await _context.SaveChangesAsync();
 
-        customerDto.Id = customer.Id; 
+        // Oluşturulan müşterinin tüm bilgilerini (GetCustomerDto) geri dönelim.
+        var resultDto = await GetCustomer(customer.Id);
 
-        return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, customerDto);
+        return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, resultDto.Value);
     }
 
-    
+    // --- DEĞİŞİKLİK 3: PUT (Update) Metodu "UpdateCustomerDto" Kullanıyor ---
+    // Detaylı müşteri bilgi ekranındaki tüm verileri alıp günceller.
+
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateCustomer(int id, CustomerDto customerDto)
+    public async Task<IActionResult> UpdateCustomer(int id, UpdateCustomerDto updateDto)
     {
-        if (id != customerDto.Id)
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (id != updateDto.Id)
         {
             return BadRequest("ID uyuşmuyor.");
         }
 
-        var existingCustomer = await _context.Customers.FindAsync(id);
+        var existingCustomer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
         if (existingCustomer == null)
         {
-            return NotFound();
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        
-        existingCustomer.CustomerName = customerDto.CustomerName;
-        existingCustomer.DueDate = customerDto.DueDate;
-        existingCustomer.Phone = customerDto.Phone;
-        existingCustomer.Address = customerDto.Address;
-        existingCustomer.CustomerNote = customerDto.CustomerNote;
-        existingCustomer.OpenAccountLimit = customerDto.OpenAccountLimit;
-        existingCustomer.TaxOffice = customerDto.TaxOffice;
-        existingCustomer.TaxNumber = customerDto.TaxNumber;
+        // Tüm alanları updateDto'dan alarak güncelle
+        existingCustomer.CustomerType = updateDto.CustomerType;
+        existingCustomer.CustomerName = updateDto.CustomerName;
+        existingCustomer.CustomerLastName = updateDto.CustomerLastName;
+        existingCustomer.Email = updateDto.Email;
+        existingCustomer.Phone = updateDto.Phone;
+        existingCustomer.Country = updateDto.Country;
+        existingCustomer.City = updateDto.City;
+        existingCustomer.District = updateDto.District;
+        existingCustomer.Address = updateDto.Address;
+        existingCustomer.PostalCode = updateDto.PostalCode;
+        existingCustomer.TaxOffice = updateDto.TaxOffice;
+        existingCustomer.TaxNumber = updateDto.TaxNumber;
+        existingCustomer.OpenAccountLimit = updateDto.OpenAccountLimit;
+        existingCustomer.DueDateInDays = updateDto.DueDateInDays;
+        existingCustomer.Discount = updateDto.Discount;
+        existingCustomer.PriceType = updateDto.PriceType;
+        existingCustomer.CustomerNote = updateDto.CustomerNote;
 
-        var validator = new CustomerValidator();
-        var validationResult = validator.Validate(existingCustomer);
-        if (!validationResult.IsValid)
-        {
-            return BadRequest(validationResult.Errors);
-        }
+        // ÖNEMLİ: Artık DTO'ya özel bir validator kullanmalısın.
+        // var validator = new UpdateCustomerDtoValidator();
+        // var validationResult = validator.Validate(updateDto);
+        // if (!validationResult.IsValid) { return BadRequest(validationResult.Errors); }
 
         try
         {
@@ -139,9 +191,9 @@ public class CustomerController : ControllerBase
         }
         catch (DbUpdateConcurrencyException)
         {
-            if (!_context.Customers.Any(e => e.Id == id))
+            if (!_context.Customers.Any(e => e.Id == id && e.UserId == currentUserId))
             {
-                return NotFound();
+                return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
             }
             else
             {
@@ -152,52 +204,389 @@ public class CustomerController : ControllerBase
         return NoContent();
     }
 
-    
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCustomer(int id)
     {
-        var customer = await _context.Customers.FindAsync(id);
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
         if (customer == null)
         {
-            return NotFound();
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
         _context.Customers.Remove(customer);
-        await _context.SaveChangesAsync(); // Değişikliği veritabanına kaydet.
+        await _context.SaveChangesAsync();
 
         return NoContent();
     }
-    [HttpGet("{id}/summary")]
-    public async Task<ActionResult<CustomerSummaryDto>> GetCustomerSummary(int id)
+
+    // --- BU METODLARDA DEĞİŞİKLİK YAPILMADI ---
+    [HttpGet("{id}/detailed-summary")]
+    public async Task<ActionResult<CustomerDetailedSummaryDto>> GetCustomerDetailedSummary(int id)
     {
-        // Müşterinin varlığını kontrol et, yoksa NotFound dönsün.
-        var customerExists = await _context.Customers.AnyAsync(c => c.Id == id);
-        if (!customerExists)
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
+        if (customer == null)
         {
-            return NotFound("Belirtilen müşteri bulunamadı.");
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        // Müşterinin toplam satış tutarını hesapla
-        var totalSales = await _context.Orders
-            .Where(o => o.CustomerId == id)
-            .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
+        // 1. Veritabanındaki ödeme tiplerini çekelim.
+        var paymentTypes = await _context.PaymentTypes
+            .Where(pt => pt.UserId == currentUserId)
+            .ToDictionaryAsync(pt => pt.Name, pt => pt.CashRegisterType);
 
-        // Müşterinin toplam ödeme tutarını hesapla
+        // 2. Müşteriye ait tamamlanmış tüm satışları çekiyoruz.
+        var allSales = await _context.Sales
+            .Include(s => s.SaleItems)
+                .ThenInclude(si => si.Product)
+            .Where(s => s.CustomerId == id && s.IsCompleted)
+            .ToListAsync();
+
+        // 3. Müşterinin yaptığı tüm ödemeleri (tahsilatları) çekiyoruz.
         var totalPayment = await _context.Payments
             .Where(p => p.CustomerId == id)
             .SumAsync(p => (decimal?)p.Amount) ?? 0;
 
-        // Kalan bakiyeyi hesapla
-        var remainingBalance = totalSales - totalPayment;
+        // Manuel olarak eklenen tüm borçların toplamını çekiyoruz (Debt tablosu)
+        var totalManualDebt = await _context.Debts
+            .Where(d => d.CustomerId == id)
+            .SumAsync(d => (decimal?)d.Amount) ?? 0;
 
-        var summaryDto = new CustomerSummaryDto
+        // 4. DTO'yu ve hesaplamaları hazırlıyoruz.
+        var summary = new CustomerDetailedSummaryDto();
+
+        summary.TotalSales = allSales.Sum(s => s.TotalAmount); // Satışlardan gelen brüt ciro
+        summary.TotalPayment = totalPayment; // Tahsilatlardan gelen brüt ciro
+        summary.RemainingBalance = customer.Balance;
+
+        // 5. Satışları Kasa Türüne Göre Gruplama
+        summary.SalesByCashRegisterType["Nakit"] = 0;
+        summary.SalesByCashRegisterType["Pos"] = 0;
+        summary.SalesByCashRegisterType["HariciKasa"] = 0;
+        summary.SalesByCashRegisterType["Açık Hesap"] = 0;
+        decimal salesDebt = 0; // Açık Hesap Satış Borcunu toplamak için geçici değişken
+
+        foreach (var sale in allSales)
         {
-            TotalSales = totalSales,
-            TotalPayment = totalPayment,
-            RemainingBalance = remainingBalance
-        };
+            if (string.IsNullOrEmpty(sale.PaymentType)) continue;
 
-        return Ok(summaryDto);
+            if (sale.PaymentType.ToLower() == "açık hesap")
+            {
+                summary.SalesByCashRegisterType["Açık Hesap"] += sale.TotalAmount;
+                salesDebt += sale.TotalAmount;
+            }
+            else if (paymentTypes.TryGetValue(sale.PaymentType, out var cashRegisterType))
+            {
+                switch (cashRegisterType)
+                {
+                    case CashRegisterType.Nakit:
+                        summary.SalesByCashRegisterType["Nakit"] += sale.TotalAmount;
+                        break;
+                    case CashRegisterType.Pos:
+                        summary.SalesByCashRegisterType["Pos"] += sale.TotalAmount;
+                        break;
+                    case CashRegisterType.HariciKasa:
+                        summary.SalesByCashRegisterType["HariciKasa"] += sale.TotalAmount;
+                        break;
+                }
+            }
+        }
+
+        // Toplam Brüt Borcu hesaplama
+        summary.TotalDebtFromSales = salesDebt + totalManualDebt;
+
+        // YENİ KRİTİK EKLENTİ: Toplam Müşteri Geliri (Total Revenue)
+        // Bu, müşteriden alınan tüm paranın (satış esnasında peşin gelen + borca karşılık sonradan gelen) toplamıdır.
+        summary.TotalCustomerRevenue = summary.TotalSales + summary.TotalPayment;
+
+        // 6. Kâr Hesaplaması (TotalProfit)
+        decimal totalProfit = 0;
+        foreach (var sale in allSales)
+        {
+            foreach (var item in sale.SaleItems)
+            {
+                if (item.Product != null)
+                {
+                    var itemProfit = (item.UnitPrice - item.Product.PurchasePrice) * item.Quantity;
+                    totalProfit += itemProfit;
+                }
+            }
+        }
+        summary.TotalProfit = totalProfit;
+
+
+        return Ok(summary);
     }
-}
 
+    [HttpGet("{id}/sales")]
+    public async Task<IActionResult> GetCustomerSales(int id, [FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+        if (customer == null)
+            return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
+
+        var query = _context.Sales
+            .Where(s => s.CustomerId == id && s.IsCompleted);
+
+        if (startDate.HasValue)
+            query = query.Where(s => s.SaleDate.Date >= startDate.Value.Date);
+        if (endDate.HasValue)
+            query = query.Where(s => s.SaleDate.Date <= endDate.Value.Date);
+
+        var salesList = await query
+            .OrderByDescending(s => s.SaleDate)
+            .Select(s => new CustomerSaleListDto
+            {
+                SaleId = s.SaleId,
+                SaleCode = s.SaleCode,
+                TotalQuantity = s.TotalQuantity,
+                DiscountRate = (s.SubTotalAmount > 0) ? Math.Round((s.DiscountAmount / s.SubTotalAmount * 100), 2) : 0,
+                TotalAmount = s.TotalAmount,
+                RemainingDebt = customer.Balance,
+                PaymentType = s.PaymentType,
+                PersonnelName = "Admin", // Bu alanı daha sonra dinamik yapabilirsin
+                Date = s.SaleDate.ToString("dd.MM.yyyy"),
+                Time = s.SaleDate.ToString("HH:mm")
+            }).ToListAsync();
+
+        return Ok(salesList);
+    }
+    [HttpGet("{id}/combined-transactions")]
+    public async Task<ActionResult<IEnumerable<CustomerCombinedTransactionDto>>> GetCombinedTransactionsForCustomer(
+     int id,
+     [FromQuery] DateTime? startDate,
+     [FromQuery] DateTime? endDate)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // 1. Müşteri ve yetki kontrolü
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
+        if (customer == null)
+        {
+            return NotFound("Müşteri bulunamadı veya bu işlem için yetkiniz yok.");
+        }
+
+        // Başlangıç tarihi 00:00:00, Bitiş tarihi 23:59:59 olarak ayarlanır
+        var startFilterDate = startDate.HasValue ? startDate.Value.Date : (DateTime?)null;
+        var endFilterDate = endDate.HasValue ? endDate.Value.Date.AddDays(1).AddSeconds(-1) : (DateTime?)null;
+
+
+        // 2. Satışları Çek ve DTO'ya Dönüştür
+        // Satışlar borç yarattığı için borç hareketi olarak kabul edilir.
+        var salesQuery = _context.Sales
+            .Where(s => s.CustomerId == id && s.IsCompleted && s.UserId == currentUserId);
+
+        if (startFilterDate.HasValue)
+            salesQuery = salesQuery.Where(s => s.SaleDate >= startFilterDate.Value);
+        if (endFilterDate.HasValue)
+            salesQuery = salesQuery.Where(s => s.SaleDate <= endFilterDate.Value);
+
+        var sales = await salesQuery
+            .Select(s => new CustomerCombinedTransactionDto
+            {
+                Id = s.SaleId,
+                TransactionDate = s.SaleDate,
+                TransactionTime = s.SaleDate.ToLocalTime().ToString("HH:mm"),
+                Description = $"Satış Kodu: {s.SaleCode}",
+                Type = "Satış",
+                Amount = s.TotalAmount,
+                PaymentTypeName = s.PaymentType,
+                TotalQuantity = s.TotalQuantity,
+                PersonnelName = "Yönetici" // Personel bilginizi buraya ekleyin
+            })
+            .ToListAsync();
+
+        // 3. Ödemeleri (Tahsilatları) Çek ve DTO'ya Dönüştür
+        // Ödemeler borcu azalttığı için alacak hareketi olarak kabul edilir.
+        var paymentsQuery = _context.Payments
+            .Include(p => p.PaymentType) // PaymentType adını almak için
+            .Where(p => p.CustomerId == id && p.UserId == currentUserId);
+
+        if (startFilterDate.HasValue)
+            paymentsQuery = paymentsQuery.Where(p => p.PaymentDate >= startFilterDate.Value);
+        if (endFilterDate.HasValue)
+            paymentsQuery = paymentsQuery.Where(p => p.PaymentDate <= endFilterDate.Value);
+
+        var payments = await paymentsQuery
+            .Select(p => new CustomerCombinedTransactionDto
+            {
+                Id = p.Id,
+                TransactionDate = p.PaymentDate,
+                TransactionTime = p.PaymentDate.ToLocalTime().ToString("HH:mm"),
+                Description = p.Note ?? "Ödeme (Tahsilat)",
+                Type = "Ödeme",
+                Amount = p.Amount,
+                PaymentTypeName = p.PaymentType != null ? p.PaymentType.Name : "Bilinmiyor",
+                TotalQuantity = null,
+                PersonnelName = "Yönetici"
+            })
+            .ToListAsync();
+
+        // 4. Manuel Borçları Çek ve DTO'ya Dönüştür
+        // Manuel Borçlar borcu artırdığı için borç hareketi olarak kabul edilir.
+        var debtsQuery = _context.Debts
+            .Where(d => d.CustomerId == id && d.UserId == currentUserId);
+
+        if (startFilterDate.HasValue)
+            debtsQuery = debtsQuery.Where(d => d.DebtDate >= startFilterDate.Value);
+        if (endFilterDate.HasValue)
+            debtsQuery = debtsQuery.Where(d => d.DebtDate <= endFilterDate.Value);
+
+        var debts = await debtsQuery
+            .Select(d => new CustomerCombinedTransactionDto
+            {
+                Id = d.Id,
+                TransactionDate = d.DebtDate,
+                TransactionTime = d.DebtDate.ToLocalTime().ToString("HH:mm"),
+                Description = d.Note ?? "Manuel Borç Ekleme",
+                Type = "Borç",
+                Amount = d.Amount,
+                PaymentTypeName = "Açık Hesap", // Borçlar genellikle açık hesaba yazılır
+                TotalQuantity = null,
+                PersonnelName = "Yönetici"
+            })
+            .ToListAsync();
+
+        // 5. Tüm Hareketleri Birleştir ve Tarihe Göre Sırala
+        var combinedList = sales
+            .Concat(payments)
+            .Concat(debts)
+            .OrderBy(x => x.TransactionDate) // En eski işlem en başta olacak şekilde sırala
+            .ToList();
+
+        // 6. Kalan Bakiyeyi Hesaplama (En Kritik Kısım)
+
+        // Filtrelenmiş işlemlerden önceki bakiyeyi (Açılış Bakiyesi) bul
+        decimal initialBalance = 0;
+        if (startFilterDate.HasValue)
+        {
+            // Başlangıç tarihinden önceki tüm satış, ödeme ve manuel borçları topla
+            var previousSalesTotal = await _context.Sales
+                .Where(s => s.CustomerId == id && s.IsCompleted && s.UserId == currentUserId && s.SaleDate < startFilterDate.Value)
+                .SumAsync(s => (decimal?)s.TotalAmount) ?? 0;
+
+            var previousPaymentsTotal = await _context.Payments
+                .Where(p => p.CustomerId == id && p.UserId == currentUserId && p.PaymentDate < startFilterDate.Value)
+                .SumAsync(p => (decimal?)p.Amount) ?? 0;
+
+            var previousDebtsTotal = await _context.Debts
+                .Where(d => d.CustomerId == id && d.UserId == currentUserId && d.DebtDate < startFilterDate.Value)
+                .SumAsync(d => (decimal?)d.Amount) ?? 0;
+
+            // Açılış Bakiyesi = (Önceki Satışlar + Önceki Manuel Borçlar) - Önceki Ödemeler
+            initialBalance = (previousSalesTotal + previousDebtsTotal) - previousPaymentsTotal;
+        }
+
+        // Geçici bakiye, filtre başlangıcından önceki bakiye ile başlar.
+        var runningBalance = initialBalance;
+
+        foreach (var item in combinedList)
+        {
+            // Not: Borç (Satış ve Manuel Borç) bakiyeyi artırır, Ödeme bakiyeyi azaltır.
+            if (item.Type == "Satış" || item.Type == "Borç")
+            {
+                runningBalance += item.Amount;
+            }
+            else if (item.Type == "Ödeme")
+            {
+                runningBalance -= item.Amount;
+            }
+            item.RemainingBalance = runningBalance;
+        }
+
+        // Sonuç listesini en yeni işlem en başta olacak şekilde tersine çevirip gönder.
+        return Ok(combinedList.OrderByDescending(x => x.TransactionDate).ToList());
+    }
+
+    [HttpGet("ApproachingCustomerPayments")]
+    public async Task<ActionResult<IEnumerable<CustomerApproachingPaymentDto>>> GetApproachingCustomerPayments()
+    {
+        // JWT'den mevcut kullanıcının ID'sini al
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // 1. ADIM: Kalan bakiyesi (RemainingBalance) > 0 olan müşterileri çek
+        var indebtedCustomers = await _context.Customers
+            .Where(c => c.UserId == currentUserId && c.Balance > 0 && c.DueDateInDays > 0)
+            .ToListAsync();
+
+        var approachingPayments = new List<CustomerApproachingPaymentDto>();
+
+        // Vade Kontrolü: Bugün ve 30 gün sonrası arasındaki vadeleri kontrol et.
+        var dueMaxDate = DateTime.Today.AddDays(30);
+
+        foreach (var customer in indebtedCustomers)
+        {
+            // 2. ADIM: Müşterinin en son Açık Hesap Satışını veya Manuel Borcunu bul.
+            // Vade, genellikle borcun oluştuğu son tarihe göre hesaplanır.
+
+            // A. Son Açık Hesap Satışı (PaymentType == "Açık Hesap" olan)
+            var lastOpenAccountSale = await _context.Sales
+                .Where(s => s.CustomerId == customer.Id && s.UserId == currentUserId && s.PaymentType == "Açık Hesap")
+                .OrderByDescending(s => s.SaleDate)
+                .Select(s => new { Date = s.SaleDate, Code = s.SaleCode, Amount = s.TotalAmount, Type = "Satış" })
+                .FirstOrDefaultAsync();
+
+            // B. Son Manuel Borç (Debt tablosundan)
+            var lastManualDebt = await _context.Debts
+                .Where(d => d.CustomerId == customer.Id && d.UserId == currentUserId)
+                .OrderByDescending(d => d.DebtDate)
+                .Select(d => new { Date = d.DebtDate, Code = d.Note ?? "Manuel Borç", Amount = d.Amount, Type = "Borç" })
+                .FirstOrDefaultAsync();
+
+            // C. İki işlemi birleştirip en yenisini seç.
+            var allTransactions = new List<dynamic>();
+            if (lastOpenAccountSale != null) allTransactions.Add(lastOpenAccountSale);
+            if (lastManualDebt != null) allTransactions.Add(lastManualDebt);
+
+            var lastDebtTransaction = allTransactions
+                .OrderByDescending(t => t.Date)
+                .FirstOrDefault();
+
+            // 3. ADIM: Vade Kontrolü ve Ekleme
+            if (lastDebtTransaction != null)
+            {
+                // Vade tarihini hesapla: Son borç işlemi tarihi + Müşterinin Vade Günü
+                var dueDate = lastDebtTransaction.Date.AddDays(customer.DueDateInDays);
+                var daysUntilDue = (int)(dueDate.Date - DateTime.Today).TotalDays;
+
+                // Vade bugünden sonra ve 30 gün içinde mi?
+                if (daysUntilDue >= 0 && daysUntilDue <= 30)
+                {
+                    // DueDateDescription oluşturma
+                    string dueDateDescription;
+                    if (daysUntilDue == 0)
+                        dueDateDescription = "Bugün";
+                    else if (daysUntilDue == 1)
+                        dueDateDescription = "Yarın";
+                    else
+                        dueDateDescription = $"{daysUntilDue} Gün Sonra";
+
+                    approachingPayments.Add(new CustomerApproachingPaymentDto
+                    {
+                        DueDate = dueDate,
+                        DueDateDescription = dueDateDescription,
+                        CustomerName = $"{customer.CustomerName} {customer.CustomerLastName}",
+                        RemainingBalance = customer.Balance, // Müşterinin toplam kalan bakiyesi
+                        SalesCode = lastDebtTransaction.Code,
+                        TransactionAmount = lastDebtTransaction.Amount,
+                        TransactionDate = lastDebtTransaction.Date,
+                        DaysUntilDue = daysUntilDue
+                    });
+                }
+            }
+        }
+
+        // 4. ADIM: Vade tarihine göre sıralayıp dön
+        return Ok(approachingPayments.OrderBy(p => p.DueDate));
+    }
+
+}

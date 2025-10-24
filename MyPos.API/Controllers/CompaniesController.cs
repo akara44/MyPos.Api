@@ -2,22 +2,24 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.DTOs; 
-using MyPos.Application.Validators; 
-using MyPos.Domain.Entities; 
+using MyPos.Application.Dtos.Company;
+using MyPos.Application.Validators.Auth;
+using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
 using System;
-using System.Threading.Tasks; 
+using System.Linq; // Hata çözümü için eklendi
+using System.Security.Claims; // User ID'yi almak için eklendi
+using System.Threading.Tasks;
 
 namespace MyPos.WebApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    //[Authorize]
+    [Authorize] // Auth'u aç ve tüm controller için geçerli kıl
     public class CompaniesController : ControllerBase
     {
         private readonly MyPosDbContext _context;
-        private readonly CompanyValidator _validator; // DTO validasyonu için
+        private readonly CompanyValidator _validator;
 
         public CompaniesController(MyPosDbContext context, CompanyValidator validator)
         {
@@ -25,10 +27,11 @@ namespace MyPos.WebApi.Controllers
             _validator = validator;
         }
 
-        
         [HttpPost]
         public async Task<IActionResult> CreateCompany([FromBody] CompanyDto dto)
         {
+            // JWT'den mevcut kullanıcının ID'sini al
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (dto.Id != 0)
             {
@@ -39,7 +42,6 @@ namespace MyPos.WebApi.Controllers
             var validationResult = await _validator.ValidateAsync(dto);
             if (!validationResult.IsValid)
             {
-                
                 return BadRequest(validationResult.Errors.Select(e => new { Field = e.PropertyName, Message = e.ErrorMessage }));
             }
 
@@ -53,24 +55,24 @@ namespace MyPos.WebApi.Controllers
                 Address = dto.Address,
                 TaxOffice = dto.TaxOffice,
                 TaxNumber = dto.TaxNumber,
-                CreatedDate = DateTime.UtcNow // Oluşturma tarihi burada otomatik atanır
+                CreatedDate = DateTime.UtcNow,
+                UserId = currentUserId // Oluşturulan veriye kullanıcının ID'sini ekle
             };
 
             await _context.Company.AddAsync(company);
             await _context.SaveChangesAsync();
 
-            
             dto.Id = company.Id;
             dto.CreatedDate = company.CreatedDate;
 
             return CreatedAtAction(nameof(GetById), new { id = company.Id }, dto);
         }
 
-        
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateCompany(int id, [FromBody] CompanyDto dto)
         {
-            
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             if (id != dto.Id)
             {
                 return BadRequest("URL'deki ID ile gönderilen veri uyuşmuyor.");
@@ -83,13 +85,17 @@ namespace MyPos.WebApi.Controllers
                 return BadRequest(validationResult.Errors.Select(e => new { Field = e.PropertyName, Message = e.ErrorMessage }));
             }
 
-            var company = await _context.Company.FindAsync(id);
+            // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+            var company = await _context.Company
+                                        .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
             if (company == null)
             {
-                return NotFound("Firma bulunamadı!");
+                // Firma bulunamazsa veya kullanıcıya ait değilse NotFound dön
+                return NotFound("Firma bulunamadı veya yetkiniz yok.");
             }
 
-            
+            // Sadece güncellenecek alanları eşle
             company.Name = dto.Name;
             company.OfficialName = dto.OfficialName;
             company.TermDays = dto.TermDays;
@@ -98,21 +104,24 @@ namespace MyPos.WebApi.Controllers
             company.Address = dto.Address;
             company.TaxOffice = dto.TaxOffice;
             company.TaxNumber = dto.TaxNumber;
-            
 
             _context.Company.Update(company);
             await _context.SaveChangesAsync();
 
-            return Ok(dto); 
+            return Ok(dto);
         }
 
-       
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
-            var company = await _context.Company.FindAsync(id);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+            var company = await _context.Company
+                                        .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
             if (company == null)
-                return NotFound("Firma bulunamadı."); 
+                return NotFound("Firma bulunamadı veya yetkiniz yok.");
 
             var result = new CompanyDto
             {
@@ -131,39 +140,46 @@ namespace MyPos.WebApi.Controllers
             return Ok(result);
         }
 
-       
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var company = await _context.Company.FindAsync(id);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+            var company = await _context.Company
+                                        .FirstOrDefaultAsync(c => c.Id == id && c.UserId == currentUserId);
+
             if (company == null)
-                return NotFound("Firma bulunamadı."); 
+                return NotFound("Firma bulunamadı veya yetkiniz yok.");
 
             _context.Company.Remove(company);
             await _context.SaveChangesAsync();
 
-            return NoContent(); // Başarılı silme için 204 No Content
+            return NoContent();
         }
 
-       
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Sadece mevcut kullanıcıya ait firmaları listele
             var companies = await _context.Company
-                .Select(c => new CompanyDto
-                {
-                    Id = c.Id,
-                    Name = c.Name,
-                    OfficialName = c.OfficialName,
-                    TermDays = c.TermDays,
-                    Phone = c.Phone,
-                    MobilePhone = c.MobilePhone,
-                    Address = c.Address,
-                    TaxOffice = c.TaxOffice,
-                    TaxNumber = c.TaxNumber,
-                    CreatedDate = c.CreatedDate
-                })
-                .ToListAsync();
+                                          .Where(c => c.UserId == currentUserId)
+                                          .Select(c => new CompanyDto
+                                          {
+                                              Id = c.Id,
+                                              Name = c.Name,
+                                              OfficialName = c.OfficialName,
+                                              TermDays = c.TermDays,
+                                              Phone = c.Phone,
+                                              MobilePhone = c.MobilePhone,
+                                              Address = c.Address,
+                                              TaxOffice = c.TaxOffice,
+                                              TaxNumber = c.TaxNumber,
+                                              CreatedDate = c.CreatedDate
+                                          })
+                                          .ToListAsync();
 
             return Ok(companies);
         }

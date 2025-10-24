@@ -3,9 +3,11 @@ using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using MyPos.Application.Dtos;
-using MyPos.Application.DTOs;
-using MyPos.Application.Validators;
+using Microsoft.OpenApi.Models;
+using MyPos.Application.Dtos.Company;
+using MyPos.Application.Dtos.Product;
+using MyPos.Application.Validators.Auth;
+using MyPos.Application.Validators.Products;
 using MyPos.Infrastructure.Persistence;
 using System.Text;
 
@@ -13,7 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // 1. DbContext Konfigürasyonu
 builder.Services.AddDbContext<MyPosDbContext>(options =>
-options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2. FluentValidation
 builder.Services.AddControllers();
@@ -66,7 +68,35 @@ builder.Services.AddCors(options =>
 
 // 5. Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+// program.cs dosyasında
+builder.Services.AddSwaggerGen(c =>
+{
+    // ... diğer Swagger ayarları ...
+
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
+    });
+});
 
 var app = builder.Build();
 

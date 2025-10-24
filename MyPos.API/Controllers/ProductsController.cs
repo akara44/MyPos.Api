@@ -2,28 +2,30 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Infrastructure.Persistence;
-using MyPos.Application.Dtos;
 using MyPos.Domain.Entities;
 using MyPos.Application.Validators;
 using Microsoft.AspNetCore.Authorization;
+using MyPos.Application.Dtos.Product;
+using System.Security.Claims; // Bu using'i ekle
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace MyPos.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    //[Authorize]
+    [Authorize] // Auth'u aç
     public class ProductsController : ControllerBase
     {
         private readonly MyPosDbContext _context;
-        
+
         private readonly IValidator<CreateProductDto> _createProductValidator;
         private readonly IValidator<UpdateProductWithImageDto> _updateProductValidator;
-
 
         public ProductsController(
             MyPosDbContext context,
             IValidator<CreateProductDto> createProductValidator,
-            IValidator<UpdateProductWithImageDto> updateProductValidator) // Update validator'ı enjekte edin
+            IValidator<UpdateProductWithImageDto> updateProductValidator)
         {
             _context = context;
             _createProductValidator = createProductValidator;
@@ -34,9 +36,12 @@ namespace MyPos.Api.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var products = await _context.Products
-                .Include(p => p.ProductGroup) // Adını almak için ProductGroup'u dahil edin
-                .Select(p => new ProductResponseDto // Tutarlı çıktı için ProductResponseDto kullanın
+                .Include(p => p.ProductGroup)
+                .Where(p => p.UserId == currentUserId) // Sadece mevcut kullanıcıya ait ürünleri getir
+                .Select(p => new ProductResponseDto
                 {
                     Id = p.Id,
                     Barcode = p.Barcode,
@@ -44,15 +49,16 @@ namespace MyPos.Api.Controllers
                     Stock = p.Stock,
                     SalePrice = p.SalePrice,
                     PurchasePrice = p.PurchasePrice,
-                    ProfitRate = p.ProfitRate, 
+                    ProfitRate = p.ProfitRate,
                     TaxRate = p.TaxRate,
-                    ProductGroupId = p.ProductGroupId, 
-                    ProductGroupName = p.ProductGroup.Name, 
+                    ProductGroupId = p.ProductGroupId,
+                    ProductGroupName = p.ProductGroup.Name,
                     ImageUrl = p.ImageUrl,
                     CriticalStockLevel = p.CriticalStockLevel,
                     SalePageList = p.SalePageList,
                     Unit = p.Unit,
-                    OriginCountry = p.OriginCountry
+                    OriginCountry = p.OriginCountry,
+                    IsActive = p.IsActive
                 })
                 .ToListAsync();
 
@@ -60,25 +66,26 @@ namespace MyPos.Api.Controllers
         }
 
         // Ürün Ekleme
-        // Ürün Ekleme
         [HttpPost]
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<ProductResponseDto>> CreateProduct([FromForm] UpdateProductWithImageDto dto)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var validationResult = await _createProductValidator.ValidateAsync(dto);
             if (!validationResult.IsValid)
             {
                 return BadRequest(validationResult.Errors);
             }
 
-            // ProductGroup kontrolü
-            var productGroup = await _context.ProductGroups.FindAsync(dto.ProductGroupId);
+            // Ürün grubunun mevcut kullanıcıya ait olduğunu kontrol et
+            var productGroup = await _context.ProductGroups
+                .FirstOrDefaultAsync(pg => pg.Id == dto.ProductGroupId && pg.UserId == currentUserId);
             if (productGroup == null)
             {
-                return BadRequest("Belirtilen ürün grubu bulunamadı.");
+                return BadRequest("Belirtilen ürün grubu bulunamadı veya yetkiniz yok.");
             }
 
-            // Resim kaydetme işlemi
             string? imageUrl = null;
             if (dto.ImageFile != null && dto.ImageFile.Length > 0)
             {
@@ -114,7 +121,9 @@ namespace MyPos.Api.Controllers
                 ProductGroupId = dto.ProductGroupId,
                 Unit = dto.Unit,
                 OriginCountry = dto.OriginCountry,
-                ImageUrl = imageUrl
+                ImageUrl = imageUrl,
+                IsActive = dto.IsActive,
+                UserId = currentUserId // Kullanıcının ID'sini ekle
             };
 
             _context.Products.Add(product);
@@ -128,7 +137,8 @@ namespace MyPos.Api.Controllers
                     QuantityChange = dto.Stock,
                     TransactionType = "IN",
                     Reason = "First Stock Entry",
-                    Date = DateTime.Now
+                    Date = DateTime.Now,
+                    UserId = currentUserId // Stok hareketine de kullanıcı ID'sini ekle
                 };
 
                 _context.StockTransaction.Add(stockTransaction);
@@ -150,9 +160,9 @@ namespace MyPos.Api.Controllers
                 SalePageList = string.IsNullOrEmpty(product.SalePageList) ? "Liste1" : product.SalePageList,
                 Unit = string.IsNullOrEmpty(product.Unit) ? "Adet" : product.Unit,
                 OriginCountry = string.IsNullOrEmpty(product.OriginCountry) ? "Türkiye" : product.OriginCountry,
-                ImageUrl = product.ImageUrl
+                ImageUrl = product.ImageUrl,
+                IsActive = product.IsActive
             };
-
 
             return CreatedAtAction(
                 actionName: nameof(GetProductByBarcode),
@@ -166,27 +176,33 @@ namespace MyPos.Api.Controllers
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<ProductResponseDto>> UpdateProduct(int id, [FromForm] UpdateProductWithImageDto dto)
         {
-            var validationResult = await _updateProductValidator.ValidateAsync(dto); // Doğru validator'ı kullanın
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var validationResult = await _updateProductValidator.ValidateAsync(dto);
             if (!validationResult.IsValid)
             {
                 return BadRequest(validationResult.Errors);
             }
 
-            var product = await _context.Products.Include(p => p.ProductGroup).FirstOrDefaultAsync(p => p.Id == id); 
+            // Ürünü bulurken hem ID'yi hem de UserId'yi kontrol et
+            var product = await _context.Products
+                                        .Include(p => p.ProductGroup)
+                                        .FirstOrDefaultAsync(p => p.Id == id && p.UserId == currentUserId);
             if (product == null)
             {
-                return NotFound();
+                return NotFound("Ürün bulunamadı veya yetkiniz yok.");
             }
 
-           
             if (product.ProductGroupId != dto.ProductGroupId)
             {
-                var newProductGroup = await _context.ProductGroups.FindAsync(dto.ProductGroupId);
+                // Yeni ürün grubunun da mevcut kullanıcıya ait olduğunu kontrol et
+                var newProductGroup = await _context.ProductGroups
+                    .FirstOrDefaultAsync(pg => pg.Id == dto.ProductGroupId && pg.UserId == currentUserId);
                 if (newProductGroup == null)
                 {
-                    return BadRequest("Belirtilen yeni ürün grubu bulunamadı.");
+                    return BadRequest("Belirtilen yeni ürün grubu bulunamadı veya yetkiniz yok.");
                 }
-                product.ProductGroup = newProductGroup; 
+                product.ProductGroup = newProductGroup;
             }
 
             product.Barcode = dto.Barcode;
@@ -197,18 +213,17 @@ namespace MyPos.Api.Controllers
             product.PurchasePrice = dto.PurchasePrice;
             product.TaxRate = dto.TaxRate;
             product.SalePageList = dto.SalePageList;
-            product.ProductGroupId = dto.ProductGroupId; // ProductGroupId'yi güncelleyin
+            product.ProductGroupId = dto.ProductGroupId;
             product.Unit = dto.Unit;
             product.OriginCountry = dto.OriginCountry;
+            product.IsActive = dto.IsActive;
 
-            //  Resim güncelleme varsa
             if (dto.ImageFile != null && dto.ImageFile.Length > 0)
             {
                 var extension = Path.GetExtension(dto.ImageFile.FileName).ToLowerInvariant();
                 if (extension != ".jpg" && extension != ".jpeg" && extension != ".png")
                     return BadRequest("Sadece .jpg, .jpeg veya .png dosyaları kabul edilir.");
 
-                // Eski dosyayı sil
                 if (!string.IsNullOrEmpty(product.ImageUrl))
                 {
                     var oldPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", product.ImageUrl.TrimStart('/'));
@@ -244,33 +259,41 @@ namespace MyPos.Api.Controllers
                 ProfitRate = product.ProfitRate,
                 TaxRate = product.TaxRate,
                 ProductGroupId = product.ProductGroupId,
-                ProductGroupName = product.ProductGroup.Name 
+                ProductGroupName = product.ProductGroup.Name,
+                IsActive = product.IsActive
             });
         }
 
-
-        // Ürün Silme (burada değişiklik gerekmez)
+        // Ürün Silme
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
-            var product = await _context.Products.FindAsync(id);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Ürünü bulurken hem ID'yi hem de UserId'yi kontrol et
+            var product = await _context.Products
+                                        .FirstOrDefaultAsync(p => p.Id == id && p.UserId == currentUserId);
             if (product == null)
             {
-                return NotFound();
+                return NotFound("Ürün bulunamadı veya yetkiniz yok.");
             }
 
             _context.Products.Remove(product);
             await _context.SaveChangesAsync();
 
-            return NoContent(); // 204
+            return NoContent();
         }
 
         // ID ile Ürün Sorgulama
         [HttpGet("id/{id}", Name = "GetProductById")]
         public async Task<ActionResult<ProductResponseDto>> GetProductById(int id)
         {
-            var product = await _context.Products.Include(p => p.ProductGroup).FirstOrDefaultAsync(p => p.Id == id);
-            if (product == null) return NotFound();
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var product = await _context.Products
+                                        .Include(p => p.ProductGroup)
+                                        .FirstOrDefaultAsync(p => p.Id == id && p.UserId == currentUserId);
+            if (product == null) return NotFound("Ürün bulunamadı veya yetkiniz yok.");
 
             return Ok(new ProductResponseDto
             {
@@ -283,7 +306,8 @@ namespace MyPos.Api.Controllers
                 ProfitRate = product.ProfitRate,
                 TaxRate = product.TaxRate,
                 ProductGroupId = product.ProductGroupId,
-                ProductGroupName = product.ProductGroup.Name // ProductGroup Adını dahil edin
+                ProductGroupName = product.ProductGroup.Name,
+                IsActive = product.IsActive
             });
         }
 
@@ -291,8 +315,12 @@ namespace MyPos.Api.Controllers
         [HttpGet("barcode/{barcode}", Name = "GetProductByBarcode")]
         public async Task<ActionResult<ProductResponseDto>> GetProductByBarcode(string barcode)
         {
-            var product = await _context.Products.Include(p => p.ProductGroup).FirstOrDefaultAsync(p => p.Barcode == barcode);
-            if (product == null) return NotFound();
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var product = await _context.Products
+                                        .Include(p => p.ProductGroup)
+                                        .FirstOrDefaultAsync(p => p.Barcode == barcode && p.UserId == currentUserId);
+            if (product == null) return NotFound("Ürün bulunamadı veya yetkiniz yok.");
 
             return Ok(new ProductResponseDto
             {
@@ -305,7 +333,9 @@ namespace MyPos.Api.Controllers
                 ProfitRate = product.ProfitRate,
                 TaxRate = product.TaxRate,
                 ProductGroupId = product.ProductGroupId,
-                ProductGroupName = product.ProductGroup.Name // ProductGroup Adını dahil edin
+                ProductGroupName = product.ProductGroup.Name,
+                IsActive = product.IsActive
+
             });
         }
     }

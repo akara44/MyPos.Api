@@ -2,11 +2,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyPos.Infrastructure.Persistence;
-using System.Threading.Tasks;
+using System.Security.Claims; // Bu using'i ekle
+using System.Linq; // Added for .ToList() and .Concat()
+using System.Threading.Tasks; // Added for async/await
 
 [Route("api/[controller]")]
 [ApiController]
-//[Authorize]
+[Authorize] // Auth'u aç ve tüm controller için geçerli kıl
 public class ExpenseController : ControllerBase
 {
     private readonly MyPosDbContext _context;
@@ -19,6 +21,8 @@ public class ExpenseController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddExpense([FromBody] TransactionDto dto)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var validator = new TransactionValidator();
         var result = validator.Validate(dto);
         if (!result.IsValid) return BadRequest(result.Errors);
@@ -32,7 +36,8 @@ public class ExpenseController : ControllerBase
             Description = dto.Description,
             PaymentType = dto.PaymentType,
             TypeId = dto.TypeId,
-            Date = dto.Date
+            Date = dto.Date,
+            UserId = currentUserId // Kullanıcının ID'sini ekle
         };
 
         _context.Expenses.Add(expense);
@@ -44,7 +49,10 @@ public class ExpenseController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var expenses = await _context.Expenses
+            .Where(e => e.UserId == currentUserId) // Sadece mevcut kullanıcıya ait giderleri getir
             .Include(x => x.Type)
             .Select(x => new
             {
@@ -63,37 +71,47 @@ public class ExpenseController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateExpense(int id, [FromBody] TransactionDto dto)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var validator = new TransactionValidator();
         var result = validator.Validate(dto);
         if (!result.IsValid) return BadRequest(result.Errors);
 
-        var expense = await _context.Expenses.FindAsync(id);
-        if (expense == null) return NotFound(new { message = "Expense not found." });
+        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+        var expense = await _context.Expenses
+                                    .FirstOrDefaultAsync(e => e.Id == id && e.UserId == currentUserId);
+
+        if (expense == null) return NotFound(new { message = "Expense not found or you don't have permission." });
 
         expense.Amount = dto.Amount;
         expense.Description = dto.Description;
         expense.PaymentType = dto.PaymentType;
         expense.TypeId = dto.TypeId;
         expense.Date = dto.Date;
-       
 
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Expense updated successfully." });
     }
 
-    //  Silme
+    // Silme
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteExpense(int id)
     {
-        var expense = await _context.Expenses.FindAsync(id);
-        if (expense == null) return NotFound(new { message = "Expense not found." });
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
+        var expense = await _context.Expenses
+                                    .FirstOrDefaultAsync(e => e.Id == id && e.UserId == currentUserId);
+
+        if (expense == null) return NotFound(new { message = "Expense not found or you don't have permission." });
 
         _context.Expenses.Remove(expense);
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Expense deleted successfully." });
     }
+
     [HttpGet("filtered-list")]
     public async Task<IActionResult> GetFilteredExpenses(
     [FromQuery] DateTime? startDate,
@@ -101,8 +119,11 @@ public class ExpenseController : ControllerBase
     [FromQuery] string? paymentType,
     [FromQuery] int? typeId)
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var query = _context.Expenses
-            .Include(e => e.Type) // Gider türü bilgisini çekmek için
+            .Include(e => e.Type)
+            .Where(e => e.UserId == currentUserId) // Kullanıcı ID'ye göre ilk filtreleme
             .AsQueryable();
 
         // Filtreleme mantığı aynı şekilde uygulanır
@@ -126,7 +147,6 @@ public class ExpenseController : ControllerBase
             query = query.Where(e => e.TypeId == typeId.Value);
         }
 
-        // Filtrelenmiş gider listesini al
         var filteredExpenses = await query.Select(x => new
         {
             x.Id,
@@ -137,18 +157,21 @@ public class ExpenseController : ControllerBase
             Type = x.Type.Name
         }).ToListAsync();
 
-       
-
         return Ok(new
         {
-            
-            Expenses = filteredExpenses // Filtrelenmiş listeyi de ekle
+            Expenses = filteredExpenses
         });
     }
+
     [HttpGet("total-expense")]
     public async Task<IActionResult> GetTotalExpense()
     {
-        var allExpenses = await _context.Expenses.ToListAsync();
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Sadece mevcut kullanıcıya ait giderleri hesapla
+        var allExpenses = await _context.Expenses
+                                        .Where(e => e.UserId == currentUserId)
+                                        .ToListAsync();
 
         var totalExpense = allExpenses.Sum(e => e.Amount);
 
@@ -169,10 +192,15 @@ public class ExpenseController : ControllerBase
 
         return Ok(totals);
     }
+
     [HttpGet("expense-by-type")]
     public async Task<IActionResult> GetExpenseByType()
     {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Sadece mevcut kullanıcıya ait giderleri getir
         var expenseData = await _context.Expenses
+            .Where(e => e.UserId == currentUserId)
             .Include(e => e.Type)
             .ToListAsync();
 

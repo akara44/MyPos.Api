@@ -2,15 +2,19 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyPos.Application.Dtos;
+using MyPos.Application.Dtos.PurchaseInvoice;
 using MyPos.Domain.Entities;
 using MyPos.Infrastructure.Persistence;
+using System;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace MyPos.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    //[Authorize]
+    [Authorize]
     public class PurchaseInvoicesController : ControllerBase
     {
         private readonly MyPosDbContext _context;
@@ -18,8 +22,8 @@ namespace MyPos.Api.Controllers
         private readonly IValidator<UpdatePurchaseInvoiceDto> _updateValidator;
 
         public PurchaseInvoicesController(MyPosDbContext context,
-                                          IValidator<CreatePurchaseInvoiceDto> createValidator,
-                                          IValidator<UpdatePurchaseInvoiceDto> updateValidator)
+                                         IValidator<CreatePurchaseInvoiceDto> createValidator,
+                                         IValidator<UpdatePurchaseInvoiceDto> updateValidator)
         {
             _context = context;
             _createValidator = createValidator;
@@ -29,13 +33,19 @@ namespace MyPos.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> CreatePurchaseInvoice([FromBody] CreatePurchaseInvoiceDto createDto)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var validationResult = await _createValidator.ValidateAsync(createDto);
             if (!validationResult.IsValid)
                 return BadRequest(validationResult.Errors);
 
-            var paymentType = await _context.PaymentTypes.FindAsync(createDto.PaymentTypeId);
-            if (paymentType == null)
-                return BadRequest($"Ödeme tipi bulunamadı: {createDto.PaymentTypeId}");
+            var company = await _context.Company
+                                        .FirstOrDefaultAsync(c => c.Id == createDto.CompanyId && c.UserId == currentUserId);
+            if (company == null) return BadRequest("Firma bulunamadı veya yetkiniz yok.");
+
+            var paymentType = await _context.PaymentTypes
+                                            .FirstOrDefaultAsync(pt => pt.Id == createDto.PaymentTypeId && pt.UserId == currentUserId);
+            if (paymentType == null) return BadRequest("Ödeme tipi bulunamadı veya yetkiniz yok.");
 
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
@@ -50,7 +60,8 @@ namespace MyPos.Api.Controllers
                     TotalAmount = 0,
                     TotalDiscount = 0,
                     TotalTaxAmount = 0,
-                    GrandTotal = 0
+                    GrandTotal = 0,
+                    UserId = currentUserId
                 };
 
                 _context.PurchaseInvoices.Add(newInvoice);
@@ -58,22 +69,20 @@ namespace MyPos.Api.Controllers
 
                 foreach (var itemDto in createDto.Items)
                 {
-                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == itemDto.ProductId);
+                    var product = await _context.Products
+                                                .FirstOrDefaultAsync(p => p.Id == itemDto.ProductId && p.UserId == currentUserId);
                     if (product == null)
-                        return BadRequest($"Ürün bulunamadı: {itemDto.ProductId}");
+                        return BadRequest($"Ürün bulunamadı veya yetkiniz yok: {itemDto.ProductId}");
 
-                    // burada koşul başlatılıyor
                     decimal unitPriceToUse = itemDto.UnitPrice;
-
-                    if (unitPriceToUse <= 0) // Eğer gönderilen fiyat 0 veya boş ise
+                    if (unitPriceToUse <= 0)
                     {
                         unitPriceToUse = product.PurchasePrice;
                     }
-                    else // Eğer dolu gelirse
+                    else
                     {
-                        product.PurchasePrice = unitPriceToUse; // Ürün alış fiyatını güncelle
+                        product.PurchasePrice = unitPriceToUse;
                     }
-                    // --------------------------------------
 
                     var itemTotalPrice = itemDto.Quantity * unitPriceToUse;
                     var discountAmount1 = itemTotalPrice * (itemDto.DiscountRate1 ?? 0) / 100;
@@ -96,12 +105,12 @@ namespace MyPos.Api.Controllers
                         TaxAmount = itemTaxAmount,
                         DiscountRate1 = itemDto.DiscountRate1,
                         DiscountRate2 = itemDto.DiscountRate2,
-                        TotalDiscountAmount = itemDiscount
+                        TotalDiscountAmount = itemDiscount,
+                        UserId = currentUserId // Düzeltme: UserId eklendi
                     };
 
                     _context.PurchaseInvoiceItems.Add(newItem);
 
-                    // stok güncelle
                     product.Stock += itemDto.Quantity;
 
                     _context.StockTransaction.Add(new StockTransaction
@@ -111,7 +120,8 @@ namespace MyPos.Api.Controllers
                         TransactionType = "IN",
                         Reason = $"PurchaseInvoice:{newInvoice.Id}",
                         Date = DateTime.Now,
-                        BalanceAfter = product.Stock
+                        BalanceAfter = product.Stock,
+                        UserId = currentUserId
                     });
 
                     newInvoice.TotalAmount += itemTotalPrice;
@@ -132,33 +142,40 @@ namespace MyPos.Api.Controllers
             }
         }
 
-
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdatePurchaseInvoice(int id, [FromBody] UpdatePurchaseInvoiceDto updateDto)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var validationResult = await _updateValidator.ValidateAsync(updateDto);
             if (!validationResult.IsValid)
                 return BadRequest(validationResult.Errors);
 
-            // Check if the payment type exists
-            var paymentType = await _context.PaymentTypes.FindAsync(updateDto.PaymentTypeId);
-            if (paymentType == null)
-                return BadRequest($"Ödeme tipi bulunamadı: {updateDto.PaymentTypeId}");
+            var invoice = await _context.PurchaseInvoices
+                                        .Include(i => i.PurchaseInvoiceItems)
+                                        .Include(i => i.Company)
+                                        .FirstOrDefaultAsync(i => i.Id == id && i.UserId == currentUserId);
+
+            if (invoice == null) return NotFound("Fatura bulunamadı veya yetkiniz yok.");
+
+            if (invoice.CompanyId != updateDto.CompanyId)
+            {
+                var newCompany = await _context.Company
+                                               .FirstOrDefaultAsync(c => c.Id == updateDto.CompanyId && c.UserId == currentUserId);
+                if (newCompany == null) return BadRequest("Belirtilen firma bulunamadı veya yetkiniz yok.");
+            }
+
+            var paymentType = await _context.PaymentTypes
+                                            .FirstOrDefaultAsync(pt => pt.Id == updateDto.PaymentTypeId && pt.UserId == currentUserId);
+            if (paymentType == null) return BadRequest("Ödeme tipi bulunamadı veya yetkiniz yok.");
 
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var invoice = await _context.PurchaseInvoices
-                    .Include(i => i.PurchaseInvoiceItems)
-                    .FirstOrDefaultAsync(i => i.Id == id);
-
-                if (invoice == null)
-                    return NotFound($"Fatura bulunamadı: {id}");
-
-                // Eski stokları geri al
                 foreach (var oldItem in invoice.PurchaseInvoiceItems)
                 {
-                    var product = await _context.Products.FindAsync(oldItem.ProductId);
+                    var product = await _context.Products
+                                                .FirstOrDefaultAsync(p => p.Id == oldItem.ProductId && p.UserId == currentUserId);
                     if (product != null)
                     {
                         product.Stock -= oldItem.Quantity;
@@ -170,7 +187,8 @@ namespace MyPos.Api.Controllers
                             TransactionType = "OUT",
                             Reason = $"PurchaseInvoiceUpdate-Revert:{id}",
                             Date = DateTime.Now,
-                            BalanceAfter = product.Stock
+                            BalanceAfter = product.Stock,
+                            UserId = currentUserId
                         });
                     }
                 }
@@ -189,22 +207,20 @@ namespace MyPos.Api.Controllers
 
                 foreach (var itemDto in updateDto.Items)
                 {
-                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == itemDto.ProductId);
+                    var product = await _context.Products
+                                                .FirstOrDefaultAsync(p => p.Id == itemDto.ProductId && p.UserId == currentUserId);
                     if (product == null)
-                        return BadRequest($"Ürün bulunamadı: {itemDto.ProductId}");
+                        return BadRequest($"Ürün bulunamadı veya yetkiniz yok: {itemDto.ProductId}");
 
-                    // --- Fiyat güncelleme mantığı (CreatePurchaseInvoice ile aynı) ---
                     decimal unitPriceToUse = itemDto.UnitPrice;
-
-                    if (unitPriceToUse <= 0) // Eğer gönderilen fiyat 0 veya boş ise
+                    if (unitPriceToUse <= 0)
                     {
                         unitPriceToUse = product.PurchasePrice;
                     }
-                    else // Eğer dolu gelirse
+                    else
                     {
-                        product.PurchasePrice = unitPriceToUse; // Ürün alış fiyatını güncelle
+                        product.PurchasePrice = unitPriceToUse;
                     }
-                    // --------------------------------------------------------------
 
                     var itemTotalPrice = itemDto.Quantity * unitPriceToUse;
                     var discountAmount1 = itemTotalPrice * (itemDto.DiscountRate1 ?? 0) / 100;
@@ -227,7 +243,8 @@ namespace MyPos.Api.Controllers
                         TaxAmount = itemTaxAmount,
                         DiscountRate1 = itemDto.DiscountRate1,
                         DiscountRate2 = itemDto.DiscountRate2,
-                        TotalDiscountAmount = itemDiscount
+                        TotalDiscountAmount = itemDiscount,
+                        UserId = currentUserId
                     };
 
                     invoice.PurchaseInvoiceItems.Add(newItem);
@@ -241,7 +258,8 @@ namespace MyPos.Api.Controllers
                         TransactionType = "IN",
                         Reason = $"PurchaseInvoiceUpdate-New:{id}",
                         Date = DateTime.Now,
-                        BalanceAfter = product.Stock
+                        BalanceAfter = product.Stock,
+                        UserId = currentUserId
                     });
 
                     invoice.TotalAmount += itemTotalPrice;
@@ -265,19 +283,22 @@ namespace MyPos.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePurchaseInvoice(int id)
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 var invoice = await _context.PurchaseInvoices
-                    .Include(i => i.PurchaseInvoiceItems)
-                    .FirstOrDefaultAsync(i => i.Id == id);
+                                            .Include(i => i.PurchaseInvoiceItems)
+                                            .Include(i => i.Company)
+                                            .FirstOrDefaultAsync(i => i.Id == id && i.UserId == currentUserId);
 
-                if (invoice == null)
-                    return NotFound($"Fatura bulunamadı: {id}");
+                if (invoice == null) return NotFound("Fatura bulunamadı veya yetkiniz yok.");
 
                 foreach (var item in invoice.PurchaseInvoiceItems)
                 {
-                    var product = await _context.Products.FindAsync(item.ProductId);
+                    var product = await _context.Products
+                                                .FirstOrDefaultAsync(p => p.Id == item.ProductId && p.UserId == currentUserId);
                     if (product != null)
                     {
                         product.Stock -= item.Quantity;
@@ -289,7 +310,8 @@ namespace MyPos.Api.Controllers
                             TransactionType = "OUT",
                             Reason = $"PurchaseInvoiceDelete:{id}",
                             Date = DateTime.Now,
-                            BalanceAfter = product.Stock
+                            BalanceAfter = product.Stock,
+                            UserId = currentUserId
                         });
                     }
                 }
@@ -308,15 +330,19 @@ namespace MyPos.Api.Controllers
                 return StatusCode(500, "Fatura silinirken hata oluştu: " + ex.Message);
             }
         }
+
         [HttpGet("all")]
         public async Task<ActionResult<List<PurchaseInvoiceDetailsDto>>> GetAllPurchaseInvoices()
         {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var invoices = await _context.PurchaseInvoices
-                .Include(i => i.Company)
-                .Include(i => i.PurchaseInvoiceItems)
-                .Include(i => i.PaymentType) // Added to include payment type data
-                .OrderByDescending(i => i.InvoiceDate)
-                .ToListAsync();
+                                         .Include(i => i.Company)
+                                         .Include(i => i.PurchaseInvoiceItems)
+                                         .Include(i => i.PaymentType)
+                                         .Where(i => i.UserId == currentUserId)
+                                         .OrderByDescending(i => i.InvoiceDate)
+                                         .ToListAsync();
 
             var dtoList = invoices.Select(invoice => new PurchaseInvoiceDetailsDto
             {
@@ -330,7 +356,7 @@ namespace MyPos.Api.Controllers
                 DoesNotAffectProfit = invoice.DoesNotAffectProfit,
                 Items = invoice.PurchaseInvoiceItems.Select(item => new PurchaseInvoiceItemDetailsDto
                 {
-                    ProductName = item.ProductName, 
+                    ProductName = item.ProductName,
                     Barcode = item.Barcode,
                     Quantity = item.Quantity,
                     UnitPrice = item.UnitPrice,

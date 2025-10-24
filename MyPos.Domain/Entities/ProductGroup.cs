@@ -10,4 +10,5 @@ public class ProductGroup
     public ProductGroup? ParentGroup { get; set; }
 
     public ICollection<ProductGroup>? SubGroups { get; set; }
+    public string UserId { get; set; }
 }

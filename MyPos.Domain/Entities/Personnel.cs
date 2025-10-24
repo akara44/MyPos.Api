@@ -30,4 +30,5 @@
     public string IBAN { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
     public string ImagePath { get; set; } = string.Empty;
+    public string UserId { get; set; }
 }

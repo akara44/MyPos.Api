@@ -10,4 +10,5 @@
 
     public int TypeId { get; set; }
     public ExpenseIncomeType Type { get; set; }
+    public string UserId { get; set; }
 }

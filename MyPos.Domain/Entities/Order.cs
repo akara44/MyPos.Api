@@ -40,4 +40,5 @@ public class Order
     // İlişki Tanımları
     [ForeignKey("CustomerId")]
     public Customer Customer { get; set; }
+    public string UserId { get; set; }
 }

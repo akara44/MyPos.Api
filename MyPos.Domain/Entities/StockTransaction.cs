@@ -26,5 +26,6 @@ namespace MyPos.Domain.Entities
 
         public DateTime Date { get; set; }
         public int BalanceAfter { get; set; }
+        public string UserId { get; set; }
     }
 }

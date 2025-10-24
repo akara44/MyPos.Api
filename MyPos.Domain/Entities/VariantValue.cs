@@ -17,5 +17,6 @@ namespace MyPos.Domain.Entities
 
         [ForeignKey("VariantTypeId")]
         public VariantType? VariantType { get; set; }
+        public string UserId { get; set; }  
     }
 }
