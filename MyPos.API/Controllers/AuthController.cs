@@ -51,7 +51,38 @@ public class AuthController : ControllerBase
         };
 
         _context.Users.Add(user);
+        // Kullanıcıyı kaydet (ID'si oluşsun)
         await _context.SaveChangesAsync();
+
+        // Varsayılan Ödeme Tiplerini Ekleme Başlangıcı
+        var defaultPaymentTypes = new List<PaymentType>
+        {
+            // Nakit: CashRegisterType = 1 (Nakit)
+            new PaymentType
+            {
+                Name = "Nakit",
+                CashRegisterType = CashRegisterType.Nakit,
+                UserId = user.Id.ToString() // Yeni kaydolan kullanıcının ID'si
+            },
+            // Pos: CashRegisterType = 0 (Pos)
+            new PaymentType
+            {
+                Name = "Pos",
+                CashRegisterType = CashRegisterType.Pos,
+                UserId = user.Id.ToString()
+            },
+            // Açık Hesap: CashRegisterType = 2 (HariciKasa)
+            new PaymentType
+            {
+                Name = "Açık Hesap",
+                CashRegisterType = CashRegisterType.HariciKasa,
+                UserId = user.Id.ToString()
+            }
+        };
+
+        _context.PaymentTypes.AddRange(defaultPaymentTypes);
+        await _context.SaveChangesAsync(); // Ödeme tiplerini kaydetme
+        // Varsayılan Ödeme Tiplerini Ekleme Sonu
 
         string token = CreateToken(user);
         return Ok(new { Token = token });
