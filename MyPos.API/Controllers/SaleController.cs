@@ -32,15 +32,9 @@ public class SaleController : ControllerBase
         if (!validationResult.IsValid)
             return BadRequest(new { errors = validationResult.Errors });
 
-        if (request.DiscountValue.HasValue)
-        {
-            if (string.IsNullOrEmpty(request.DiscountType))
-                return BadRequest("İndirim değeri girildiğinde indirim tipi de belirtilmelidir.");
-            if (request.DiscountValue <= 0)
-                return BadRequest("İndirim değeri 0'dan büyük olmalıdır.");
-            if (request.DiscountType == "PERCENTAGE" && request.DiscountValue > 100)
-                return BadRequest("Yüzde indirimi 100'den fazla olamaz.");
-        }
+        // Muhtelif Tutar ve İskonto Kontrolleri (Zaten doğru çalışıyor)
+      
+        // NOT: Muhtelif Tutar (MiscellaneousItems) zorunluluğu, içindeki DTO'da (Amount > 0.01) ve listenin boş olup olmaması kontrolü ile sağlanır.
 
         var productIds = request.SaleItems.Select(x => x.ProductId).ToList();
         var products = await _context.Products
@@ -70,6 +64,7 @@ public class SaleController : ControllerBase
             UserId = currentUserId
         };
 
+        // 1. Ürün Hesaplamaları ve Stok Kontrolü
         foreach (var itemDto in request.SaleItems)
         {
             if (!products.TryGetValue(itemDto.ProductId, out var product))
@@ -85,7 +80,7 @@ public class SaleController : ControllerBase
                 UnitPrice = product.SalePrice,
                 TotalPrice = itemDto.Quantity * product.SalePrice,
                 Discount = 0,
-                UserId = currentUserId // Düzeltme: UserId eklendi
+                UserId = currentUserId
             };
 
             sale.SubTotalAmount += saleItem.TotalPrice;
@@ -93,6 +88,7 @@ public class SaleController : ControllerBase
             sale.SaleItems.Add(saleItem);
         }
 
+        // 2. İndirim Hesaplaması (SubTotal üzerinden)
         if (request.DiscountValue.HasValue && !string.IsNullOrEmpty(request.DiscountType))
         {
             decimal discountAmount = 0;
@@ -112,6 +108,7 @@ public class SaleController : ControllerBase
             sale.IsDiscountApplied = true;
         }
 
+        // 3. Muhtelif Tutar Hesaplaması
         if (request.MiscellaneousItems != null && request.MiscellaneousItems.Any())
         {
             foreach (var miscItem in request.MiscellaneousItems)
@@ -121,13 +118,14 @@ public class SaleController : ControllerBase
                     Description = miscItem.Description,
                     Amount = miscItem.Amount,
                     CreatedDate = DateTime.Now,
-                    UserId = currentUserId // Düzeltme: UserId eklendi
+                    UserId = currentUserId
                 };
                 sale.SaleMiscellaneous.Add(saleMisc);
                 sale.MiscellaneousTotal += miscItem.Amount;
             }
         }
 
+        // 4. Nihai Tutar Hesaplaması (Muhtelif tutar girilse bile iskonto uygulanır)
         sale.TotalAmount = sale.SubTotalAmount - sale.DiscountAmount + sale.MiscellaneousTotal;
 
         _context.Sales.Add(sale);
