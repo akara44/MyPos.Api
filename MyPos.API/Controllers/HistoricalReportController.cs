@@ -38,18 +38,21 @@ public class HistoricalReportController : ControllerBase
     [HttpGet("sales-totals")]
     public async Task<ActionResult<DailySummaryDto>> GetHistoricalSalesTotals(
         [FromQuery] DateTime startDate,
-        [FromQuery] TimeSpan startTime, // Güncellendi
+        [FromQuery] TimeSpan startTime,
         [FromQuery] DateTime endDate,
-        [FromQuery] TimeSpan endTime) // Güncellendi
+        [FromQuery] TimeSpan endTime)
     {
-        // Tarih ve saatleri birleştirerek tam DateTime nesnelerini oluştur
-        var startFilter = startDate.Date.Add(startTime);
-        var endFilter = endDate.Date.Add(endTime);
+        // HATA DÜZELTME: Tüm filtreleme işlemlerini UTC olarak yapmak için güncellendi
+        var startLocalTime = startDate.Date.Add(startTime);
+        var endLocalTime = endDate.Date.Add(endTime);
 
-        if (startFilter >= endFilter)
+        if (startLocalTime >= endLocalTime)
         {
             return BadRequest("Başlangıç tarih ve saati, bitiş tarih ve saatinden küçük olmalıdır.");
         }
+
+        var startFilter = startLocalTime.ToUniversalTime();
+        var endFilter = endLocalTime.ToUniversalTime();
 
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -57,8 +60,8 @@ public class HistoricalReportController : ControllerBase
         var completedSales = await _context.Sales
             .Where(s => s.UserId == currentUserId &&
                         s.IsCompleted && // Sadece tamamlanmış satışlar
-                        s.SaleDate >= startFilter &&
-                        s.SaleDate < endFilter)
+                        s.SaleDate >= startFilter && // UTC KULLANILDI
+                        s.SaleDate < endFilter)      // UTC KULLANILDI
             .ToListAsync();
 
         // 2. Ödeme Tiplerine Göre Detaylı Toplamları Hesapla
@@ -87,6 +90,8 @@ public class HistoricalReportController : ControllerBase
             }
             else if (sale.PaymentType.Equals("Parçalı", StringComparison.OrdinalIgnoreCase))
             {
+                // NOT: Payments koleksiyonundaki SaleId'si ile filtrelenmiş ödemeler çekilir.
+                // Bu ödemeler muhtemelen UTC olarak kayıtlıdır ve SaleDate'e bakılmaz.
                 var splitPayments = await _context.Payments
                     .Where(p => p.SaleId == sale.SaleId)
                     .ToListAsync();
@@ -120,8 +125,8 @@ public class HistoricalReportController : ControllerBase
         // 3. Doğrudan Borç Ekleme İşlemlerini Çek
         var directDebtsTotal = await _context.Debts
             .Where(d => d.UserId == currentUserId &&
-                        d.DebtDate >= startFilter &&
-                        d.DebtDate < endFilter)
+                        d.DebtDate >= startFilter && // UTC KULLANILDI
+                        d.DebtDate < endFilter)      // UTC KULLANILDI
             .SumAsync(d => (decimal?)d.Amount) ?? 0;
 
         // 4. Nihai Toplamları Hesapla
@@ -165,18 +170,21 @@ public class HistoricalReportController : ControllerBase
     [HttpGet("cash-flow")]
     public async Task<ActionResult<DailyCashFlowReportDto>> GetHistoricalCashFlowReport(
         [FromQuery] DateTime startDate,
-        [FromQuery] TimeSpan startTime, // Güncellendi
+        [FromQuery] TimeSpan startTime,
         [FromQuery] DateTime endDate,
-        [FromQuery] TimeSpan endTime) // Güncellendi
+        [FromQuery] TimeSpan endTime)
     {
-        // Tarih ve saatleri birleştirerek tam DateTime nesnelerini oluştur
-        var startFilter = startDate.Date.Add(startTime);
-        var endFilter = endDate.Date.Add(endTime);
+        // HATA DÜZELTME: Tüm filtreleme işlemlerini UTC olarak yapmak için güncellendi
+        var startLocalTime = startDate.Date.Add(startTime);
+        var endLocalTime = endDate.Date.Add(endTime);
 
-        if (startFilter >= endFilter)
+        if (startLocalTime >= endLocalTime)
         {
             return BadRequest("Başlangıç tarih ve saati, bitiş tarih ve saatinden küçük olmalıdır.");
         }
+
+        var startFilter = startLocalTime.ToUniversalTime();
+        var endFilter = endLocalTime.ToUniversalTime();
 
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var report = new DailyCashFlowReportDto();
@@ -186,10 +194,10 @@ public class HistoricalReportController : ControllerBase
         // --------------------------------------------------------------
         var customerPayments = await _context.Payments
             .Where(p => p.UserId == currentUserId &&
-                        p.PaymentDate >= startFilter &&
-                        p.PaymentDate < endFilter &&
-                        p.SaleId == null)
-            .Include(p => p.PaymentType) // PaymentType navigasyon özelliği üzerinden isim almak için eklendi
+                        p.PaymentDate >= startFilter && // UTC KULLANILDI
+                        p.PaymentDate < endFilter &&    // UTC KULLANILDI
+                        p.SaleId == null) // Sadece borç tahsilatları
+            .Include(p => p.PaymentType)
             .ToListAsync();
 
         report.CustomerPayments.Total = customerPayments.Sum(p => p.Amount);
@@ -209,8 +217,8 @@ public class HistoricalReportController : ControllerBase
             .Include(t => t.PaymentType)
             .Where(t => t.Company.UserId == currentUserId &&
                         t.Type == MyPos.Domain.Entities.TransactionType.Payment &&
-                        t.TransactionDate >= startFilter &&
-                        t.TransactionDate < endFilter)
+                        t.TransactionDate >= startFilter && // UTC KULLANILDI
+                        t.TransactionDate < endFilter)      // UTC KULLANILDI
             .ToListAsync();
 
         report.CompanyPayments.Total = companyPayments.Sum(t => t.Amount);
@@ -228,8 +236,8 @@ public class HistoricalReportController : ControllerBase
         // --------------------------------------------------------------
         var incomes = await _context.Incomes
             .Where(i => i.UserId == currentUserId &&
-                        i.Date >= startFilter &&
-                        i.Date < endFilter)
+                        i.Date >= startFilter && // UTC KULLANILDI
+                        i.Date < endFilter)      // UTC KULLANILDI
             .ToListAsync();
 
         report.Incomes.Total = incomes.Sum(i => i.Amount);
@@ -247,8 +255,8 @@ public class HistoricalReportController : ControllerBase
         // --------------------------------------------------------------
         var expenses = await _context.Expenses
             .Where(e => e.UserId == currentUserId &&
-                        e.Date >= startFilter &&
-                        e.Date < endFilter)
+                        e.Date >= startFilter && // UTC KULLANILDI
+                        e.Date < endFilter)      // UTC KULLANILDI
             .ToListAsync();
 
         report.Expenses.Total = expenses.Sum(e => e.Amount);
@@ -301,18 +309,21 @@ public class HistoricalReportController : ControllerBase
     [HttpGet("comprehensive-summary")]
     public async Task<ActionResult<ComprehensiveDailySummaryDto>> GetComprehensiveHistoricalSummary(
         [FromQuery] DateTime startDate,
-        [FromQuery] TimeSpan startTime, // Güncellendi
+        [FromQuery] TimeSpan startTime,
         [FromQuery] DateTime endDate,
-        [FromQuery] TimeSpan endTime) // Güncellendi
+        [FromQuery] TimeSpan endTime)
     {
-        // Tarih ve saatleri birleştirerek tam DateTime nesnelerini oluştur
-        var startFilter = startDate.Date.Add(startTime);
-        var endFilter = endDate.Date.Add(endTime);
+        // HATA DÜZELTME: Tüm filtreleme işlemlerini UTC olarak yapmak için güncellendi
+        var startLocalTime = startDate.Date.Add(startTime);
+        var endLocalTime = endDate.Date.Add(endTime);
 
-        if (startFilter >= endFilter)
+        if (startLocalTime >= endLocalTime)
         {
             return BadRequest("Başlangıç tarih ve saati, bitiş tarih ve saatinden küçük olmalıdır.");
         }
+
+        var startFilter = startLocalTime.ToUniversalTime();
+        var endFilter = endLocalTime.ToUniversalTime();
 
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -320,33 +331,33 @@ public class HistoricalReportController : ControllerBase
 
         // Satışlar
         var sales = await _context.Sales
-            .Where(s => s.UserId == currentUserId && s.SaleDate >= startFilter && s.SaleDate < endFilter)
+            .Where(s => s.UserId == currentUserId && s.SaleDate >= startFilter && s.SaleDate < endFilter) // UTC KULLANILDI
             .Include(s => s.SaleItems)
                 .ThenInclude(si => si.Product)
             .ToListAsync();
 
         var incomes = await _context.Incomes
-            .Where(i => i.UserId == currentUserId && i.Date >= startFilter && i.Date < endFilter)
+            .Where(i => i.UserId == currentUserId && i.Date >= startFilter && i.Date < endFilter) // UTC KULLANILDI
             .ToListAsync();
 
         var expenses = await _context.Expenses
-            .Where(e => e.UserId == currentUserId && e.Date >= startFilter && e.Date < endFilter)
+            .Where(e => e.UserId == currentUserId && e.Date >= startFilter && e.Date < endFilter) // UTC KULLANILDI
             .ToListAsync();
 
         // Müşteri Ödemeleri
         var customerPayments = await _context.Payments
-            .Where(p => p.UserId == currentUserId && p.PaymentDate >= startFilter && p.PaymentDate < endFilter)
+            .Where(p => p.UserId == currentUserId && p.PaymentDate >= startFilter && p.PaymentDate < endFilter) // UTC KULLANILDI
             .Include(p => p.PaymentType)
             .ToListAsync();
 
         var companyTransactions = await _context.CompanyTransactions
             .Where(ct => ct.Company.UserId == currentUserId &&
                          ct.Type == TransactionType.Payment &&
-                         ct.TransactionDate >= startFilter && ct.TransactionDate < endFilter)
+                         ct.TransactionDate >= startFilter && ct.TransactionDate < endFilter) // UTC KULLANILDI
             .ToListAsync();
 
         var cashPurchaseInvoices = await _context.PurchaseInvoices
-            .Where(pi => pi.UserId == currentUserId && pi.InvoiceDate >= startFilter && pi.InvoiceDate < endFilter)
+            .Where(pi => pi.UserId == currentUserId && pi.InvoiceDate >= startFilter && pi.InvoiceDate < endFilter) // UTC KULLANILDI
             .Include(pi => pi.PaymentType)
             .ToListAsync();
 
@@ -464,11 +475,11 @@ public class HistoricalReportController : ControllerBase
     [HttpGet("customer-payments")]
     public async Task<ActionResult<IEnumerable<DailyCustomerPaymentDetailDto>>> GetHistoricalCustomerPayments(
         [FromQuery] DateTime startDate,
-        [FromQuery] TimeSpan startTime, // Güncellendi
+        [FromQuery] TimeSpan startTime,
         [FromQuery] DateTime endDate,
-        [FromQuery] TimeSpan endTime) // Güncellendi
+        [FromQuery] TimeSpan endTime)
     {
-        // Tarih ve saatleri birleştirerek tam DateTime nesnelerini oluştur
+        // NOT: Bu metot zaten UTC kullanıyordu, sadece kodun okunurluğu için başlangıç mantığı düzeltildi.
         var startLocalTime = startDate.Date.Add(startTime);
         var endLocalTime = endDate.Date.Add(endTime);
 
@@ -479,9 +490,7 @@ public class HistoricalReportController : ControllerBase
 
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        // Orijinalindeki gibi UTC saatleri kullanarak filtreleme (Eğer veritabanı UTC tutuyorsa)
-        // startFilter ve endFilter'ı burada UTC'ye çeviriyoruz, diğer metotlarda ise yerel zaman kullanılıyordu.
-        // Bu tutarsızlığı korumak için sadece bu metotta ToUniversalTime() kullanıldı.
+        // Orijinalindeki gibi UTC saatleri kullanarak filtreleme
         var startFilter = startLocalTime.ToUniversalTime();
         var endFilter = endLocalTime.ToUniversalTime();
 
@@ -522,11 +531,11 @@ public class HistoricalReportController : ControllerBase
     [HttpGet("company-transactions")]
     public async Task<ActionResult<IEnumerable<DailyCompanyTransactionDto>>> GetHistoricalCompanyTransactions(
         [FromQuery] DateTime startDate,
-        [FromQuery] TimeSpan startTime, // Güncellendi
+        [FromQuery] TimeSpan startTime,
         [FromQuery] DateTime endDate,
-        [FromQuery] TimeSpan endTime) // Güncellendi
+        [FromQuery] TimeSpan endTime)
     {
-        // Tarih ve saatleri birleştirerek tam DateTime nesnelerini oluştur
+        // NOT: Bu metot zaten UTC kullanıyordu, sadece kodun okunurluğu için başlangıç mantığı düzeltildi.
         var startLocalTime = startDate.Date.Add(startTime);
         var endLocalTime = endDate.Date.Add(endTime);
 
@@ -545,8 +554,8 @@ public class HistoricalReportController : ControllerBase
         var dailyTransactions = await _context.CompanyTransactions
             .Include(ct => ct.Company)
             .Where(ct => ct.Company.UserId == currentUserId &&
-                         ct.TransactionDate >= startFilter &&
-                         ct.TransactionDate < endFilter &&
+                         ct.TransactionDate >= startFilter && // UTC KULLANILDI
+                         ct.TransactionDate < endFilter &&    // UTC KULLANILDI
                          (ct.Type == MyPos.Domain.Entities.TransactionType.Debt ||
                           ct.Type == MyPos.Domain.Entities.TransactionType.Payment))
             .ToListAsync();
