@@ -166,36 +166,43 @@ public class AuthController : ControllerBase
         return BCrypt.Net.BCrypt.Verify(password, storedHash);
     }
 
-    private string CreatePersonnelToken(Personnel personnel)
-    {
-        var jwtKey = _config["Jwt:Key"] ?? throw new ApplicationException("JWT Key configuration is missing");
+   private string CreatePersonnelToken(Personnel personnel)
+{
+    var jwtKey = _config["Jwt:Key"] ?? throw new ApplicationException("JWT Key configuration is missing");
 
-        var claims = new[]
-        {
-        new Claim(ClaimTypes.NameIdentifier, personnel.Id.ToString()),
+    var claims = new[]
+    {
+        // 🚨 Önemli Değişiklik: NameIdentifier'a Personel ID'si yerine Ana Kullanıcı ID'sini koyuyoruz.
+        // Diğer Controller'lar (PersonnelController, ProductGroupController) bu ClaimTypes.NameIdentifier'ı 
+        // veri filtrelemede (Where(p => p.UserId == currentUserId)) kullandığı için bu gereklidir.
+        new Claim(ClaimTypes.NameIdentifier, personnel.UserId), 
+        
+        // Personelin kendi ID'sini de gerekirse "PersonnelId" adında özel bir claim olarak ekleyebiliriz.
+        new Claim("PersonnelId", personnel.Id.ToString()),
+        
         new Claim(ClaimTypes.Name, personnel.Name ?? string.Empty),
         new Claim("Role", personnel.Role ?? string.Empty),
         new Claim("Phone", personnel.Phone ?? string.Empty),
 
-        
+        // İzinler (PersonnelController.cs'de Personel Yetki Kontrolü için kullanılır)
         new Claim("ViewCustomer", personnel.ViewCustomer.ToString()),
         new Claim("AddOrUpdateProduct", personnel.AddOrUpdateProduct.ToString()),
         new Claim("DeleteProduct", personnel.DeleteProduct.ToString())
     };
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
+    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
 
-        var tokenDescriptor = new SecurityTokenDescriptor
-        {
-            Subject = new ClaimsIdentity(claims),
-            Expires = DateTime.UtcNow.AddDays(1),
-            SigningCredentials = creds
-        };
+    var tokenDescriptor = new SecurityTokenDescriptor
+    {
+        Subject = new ClaimsIdentity(claims),
+        Expires = DateTime.UtcNow.AddDays(1),
+        SigningCredentials = creds
+    };
 
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var token = tokenHandler.CreateToken(tokenDescriptor);
-        return tokenHandler.WriteToken(token);
-    }
+    var tokenHandler = new JwtSecurityTokenHandler();
+    var token = tokenHandler.CreateToken(tokenDescriptor);
+    return tokenHandler.WriteToken(token);
+}
 
 }
