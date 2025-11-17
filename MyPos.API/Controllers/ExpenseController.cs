@@ -21,6 +21,10 @@ public class ExpenseController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddExpense([FromBody] TransactionDto dto)
     {
+        if (!HasPermission("ViewIncomeExpense"))
+        {
+            return StatusCode(403, new { message = "Gelir/Gider işlemi yapma yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var validator = new TransactionValidator();
@@ -49,6 +53,10 @@ public class ExpenseController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
+        if (!HasPermission("ViewIncomeExpense"))
+        {
+            return StatusCode(403, new { message = "Gelir/Gider toplamlarını görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var expenses = await _context.Expenses
@@ -71,6 +79,10 @@ public class ExpenseController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateExpense(int id, [FromBody] TransactionDto dto)
     {
+        if (!HasPermission("ViewIncomeExpense"))
+        {
+            return StatusCode(403, new { message = "Gelir/Gider türüne göre görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var validator = new TransactionValidator();
@@ -214,5 +226,21 @@ public class ExpenseController : ControllerBase
             .ToList();
 
         return Ok(groupedData);
+    }
+    private bool HasPermission(string claimType)
+    {
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+        if (userRole == "Admin")
+        {
+            return true;
+        }
+
+        var claimValue = User.FindFirstValue(claimType);
+        if (bool.TryParse(claimValue, out bool hasPermission) && hasPermission)
+        {
+            return true;
+        }
+
+        return false;
     }
 }

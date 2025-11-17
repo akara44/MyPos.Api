@@ -28,6 +28,13 @@ public class CustomerController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<GetCustomerDto>>> GetCustomers()
     {
+        // 🚨 Yetki Kontrolü Başlangıcı 🚨
+        if (!HasPermission("ViewCustomer"))
+        {
+            return StatusCode(403, new { message = "Bu işlemi yapmaya yetkiniz yok." });
+        }
+        // 🚨 Yetki Kontrolü Sonu 🚨
+
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var customers = await _context.Customers
@@ -60,9 +67,17 @@ public class CustomerController : ControllerBase
         return Ok(customers);
     }
 
+    // --- Tek Müşteriyi Getir (ViewCustomer Yetki Kontrolü Eklendi) ---
     [HttpGet("{id}")]
     public async Task<ActionResult<GetCustomerDto>> GetCustomer(int id)
     {
+        // 🚨 Yetki Kontrolü Başlangıcı 🚨
+        if (!HasPermission("ViewCustomer"))
+        {
+            return StatusCode(403, new { message = "Bu işlemi yapmaya yetkiniz yok." });
+        }
+        // 🚨 Yetki Kontrolü Sonu 🚨
+
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var customer = await _context.Customers
@@ -98,6 +113,34 @@ public class CustomerController : ControllerBase
         };
 
         return Ok(customerDto);
+    }
+
+    // ... Diğer metotlar (CreateCustomer, UpdateCustomer, DeleteCustomer vb.) ...
+    // Bu metotlara da yetkilendirme eklemek gerekecektir.
+
+    // --- YENİ YARDIMCI METOT ---
+    private bool HasPermission(string claimType)
+    {
+        // Yönetici (Admin) kullanıcının (register ile kayıt olan) tüm yetkileri vardır.
+        // Bu, JWT'deki Role claim'inden anlaşılabilir.
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+        if (userRole == "Admin")
+        {
+            return true;
+        }
+
+        // Personel için ilgili Claim'i kontrol et.
+        // Claim değeri string "True" veya "False" olarak tutuluyor (AuthController'da).
+        var claimValue = User.FindFirstValue(claimType);
+
+        // Eğer claim yoksa (null), veya değeri "False" ise yetkisi yoktur.
+        // `bool.TryParse` kullanarak güvenli bir kontrol yapılır.
+        if (bool.TryParse(claimValue, out bool hasPermission) && hasPermission)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     // --- DEĞİŞİKLİK 2: POST (Create) Metodu "CreateCustomerDto" Kullanıyor ---

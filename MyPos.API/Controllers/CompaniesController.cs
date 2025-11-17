@@ -30,6 +30,10 @@ namespace MyPos.WebApi.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateCompany([FromBody] CompanyDto dto)
         {
+            if (!HasPermission("ManageCompany"))
+            {
+                return StatusCode(403, new { message = "Firma oluşturma yetkiniz yok." });
+            }
             // JWT'den mevcut kullanıcının ID'sini al
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -71,6 +75,10 @@ namespace MyPos.WebApi.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateCompany(int id, [FromBody] CompanyDto dto)
         {
+            if (!HasPermission("ManageCompany"))
+            {
+                return StatusCode(403, new { message = "Firma güncelleme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (id != dto.Id)
@@ -114,6 +122,10 @@ namespace MyPos.WebApi.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
+            if (!HasPermission("ManageCompany"))
+            {
+                return StatusCode(403, new { message = "Firma silme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
@@ -143,6 +155,10 @@ namespace MyPos.WebApi.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
+            if (!HasPermission("ManageCompany"))
+            {
+                return StatusCode(403, new { message = "Firma silme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
@@ -161,6 +177,10 @@ namespace MyPos.WebApi.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
+            if (!HasPermission("ManageCompany"))
+            {
+                return StatusCode(403, new { message = "Firma görüntüleme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             // Sadece mevcut kullanıcıya ait firmaları listele
@@ -182,6 +202,25 @@ namespace MyPos.WebApi.Controllers
                                           .ToListAsync();
 
             return Ok(companies);
+        }
+        private bool HasPermission(string claimType)
+        {
+            // Admin'in her zaman tüm yetkileri vardır.
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            if (userRole == "Admin")
+            {
+                return true;
+            }
+
+            // Personel için ilgili Claim'i kontrol et (Claim değeri string "True" olmalı).
+            var claimValue = User.FindFirstValue(claimType);
+
+            if (bool.TryParse(claimValue, out bool hasPermission) && hasPermission)
+            {
+                return true;
+            }
+
+            return false;
         }
     }
 }

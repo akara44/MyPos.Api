@@ -70,7 +70,12 @@ namespace MyPos.Api.Controllers
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<ProductResponseDto>> CreateProduct([FromForm] UpdateProductWithImageDto dto)
         {
+            if (!HasPermission("AddOrUpdateProduct"))
+            {
+                return StatusCode(403, new { message = "Ürün ekleme/güncelleme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
 
             var validationResult = await _createProductValidator.ValidateAsync(dto);
             if (!validationResult.IsValid)
@@ -176,6 +181,10 @@ namespace MyPos.Api.Controllers
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<ProductResponseDto>> UpdateProduct(int id, [FromForm] UpdateProductWithImageDto dto)
         {
+            if (!HasPermission("AddOrUpdateProduct"))
+            {
+                return StatusCode(403, new { message = "Ürün ekleme/güncelleme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var validationResult = await _updateProductValidator.ValidateAsync(dto);
@@ -268,6 +277,11 @@ namespace MyPos.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
+            if (!HasPermission("DeleteProduct"))
+            {
+                // Yetki yoksa 403 Forbidden ve net bir mesaj dön.
+                return StatusCode(403, new { message = "Ürün silme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             // Ürünü bulurken hem ID'yi hem de UserId'yi kontrol et
@@ -338,5 +352,26 @@ namespace MyPos.Api.Controllers
 
             });
         }
+        private bool HasPermission(string claimType)
+        {
+            // Yönetici (Admin) kullanıcının (register ile kayıt olan) tüm yetkileri vardır.
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            if (userRole == "Admin")
+            {
+                return true;
+            }
+
+            // Personel için ilgili Claim'i kontrol et.
+            // Claim değeri string "True" veya "False" olarak tutuluyor (AuthController'da).
+            var claimValue = User.FindFirstValue(claimType);
+
+            // Eğer claim yoksa (null), veya değeri "False" ise yetkisi yoktur.
+            if (bool.TryParse(claimValue, out bool hasPermission) && hasPermission)
+            {
+                return true;
+            }
+
+            return false;
+        }   
     }
 }

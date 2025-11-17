@@ -24,6 +24,10 @@ public class ExpenseIncomeTypeController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<object>>> GetAll()
     {
+        if (!HasPermission("ViewIncomeExpense"))
+        {
+            return StatusCode(403, new { message = "Gelir/Gider işlemi yapma yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         // Sadece mevcut kullanıcıya ait tipleri getir
@@ -39,6 +43,10 @@ public class ExpenseIncomeTypeController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ExpenseIncomeTypeDto dto)
     {
+        if (!HasPermission("ViewIncomeExpense"))
+        {
+            return StatusCode(403, new { message = "Gelir/Gider toplamlarını görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var validator = new ExpenseIncomeTypeValidator();
@@ -63,6 +71,10 @@ public class ExpenseIncomeTypeController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] ExpenseIncomeTypeDto dto)
     {
+        if (!HasPermission("ViewIncomeExpense"))
+        {
+            return StatusCode(403, new { message = "Gelir/Gider türüne göre görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var validator = new ExpenseIncomeTypeValidator();
@@ -88,6 +100,10 @@ public class ExpenseIncomeTypeController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!HasPermission("ViewIncomeExpense"))
+        {
+            return StatusCode(403, new { message = "Gelir/Gider türüne göre görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         // Veriyi bulurken hem ID'yi hem de UserId'yi kontrol et
@@ -101,5 +117,21 @@ public class ExpenseIncomeTypeController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Type deleted successfully." });
+    }
+    private bool HasPermission(string claimType)
+    {
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+        if (userRole == "Admin")
+        {
+            return true;
+        }
+
+        var claimValue = User.FindFirstValue(claimType);
+        if (bool.TryParse(claimValue, out bool hasPermission) && hasPermission)
+        {
+            return true;
+        }
+
+        return false;
     }
 }
