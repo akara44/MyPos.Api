@@ -42,6 +42,10 @@ public class HistoricalReportController : ControllerBase
         [FromQuery] DateTime endDate,
         [FromQuery] TimeSpan endTime)
     {
+        if (!HasPermission("HistoricalReport"))
+        {
+            return StatusCode(403, new { message = "Tarihsel raporları görüntüleme yetkiniz yok." });
+        }
         // HATA DÜZELTME: Tüm filtreleme işlemlerini UTC olarak yapmak için güncellendi
         var startLocalTime = startDate.Date.Add(startTime);
         var endLocalTime = endDate.Date.Add(endTime);
@@ -174,6 +178,10 @@ public class HistoricalReportController : ControllerBase
         [FromQuery] DateTime endDate,
         [FromQuery] TimeSpan endTime)
     {
+        if (!HasPermission("HistoricalReport"))
+        {
+            return StatusCode(403, new { message = "Tarihsel raporları görüntüleme yetkiniz yok." });
+        }
         // HATA DÜZELTME: Tüm filtreleme işlemlerini UTC olarak yapmak için güncellendi
         var startLocalTime = startDate.Date.Add(startTime);
         var endLocalTime = endDate.Date.Add(endTime);
@@ -313,6 +321,10 @@ public class HistoricalReportController : ControllerBase
         [FromQuery] DateTime endDate,
         [FromQuery] TimeSpan endTime)
     {
+        if (!HasPermission("HistoricalReport"))
+        {
+            return StatusCode(403, new { message = "Tarihsel raporları görüntüleme yetkiniz yok." });
+        }
         // HATA DÜZELTME: Tüm filtreleme işlemlerini UTC olarak yapmak için güncellendi
         var startLocalTime = startDate.Date.Add(startTime);
         var endLocalTime = endDate.Date.Add(endTime);
@@ -479,6 +491,10 @@ public class HistoricalReportController : ControllerBase
         [FromQuery] DateTime endDate,
         [FromQuery] TimeSpan endTime)
     {
+        if (!HasPermission("HistoricalReport"))
+        {
+            return StatusCode(403, new { message = "Tarihsel raporları görüntüleme yetkiniz yok." });
+        }
         // NOT: Bu metot zaten UTC kullanıyordu, sadece kodun okunurluğu için başlangıç mantığı düzeltildi.
         var startLocalTime = startDate.Date.Add(startTime);
         var endLocalTime = endDate.Date.Add(endTime);
@@ -535,6 +551,10 @@ public class HistoricalReportController : ControllerBase
         [FromQuery] DateTime endDate,
         [FromQuery] TimeSpan endTime)
     {
+        if (!HasPermission("HistoricalReport"))
+        {
+            return StatusCode(403, new { message = "Tarihsel raporları görüntüleme yetkiniz yok." });
+        }
         // NOT: Bu metot zaten UTC kullanıyordu, sadece kodun okunurluğu için başlangıç mantığı düzeltildi.
         var startLocalTime = startDate.Date.Add(startTime);
         var endLocalTime = endDate.Date.Add(endTime);
@@ -576,5 +596,24 @@ public class HistoricalReportController : ControllerBase
             .ToList();
 
         return Ok(groupedTransactions);
+    }
+    private bool HasPermission(string claimType)
+    {
+        // Admin'in her zaman tüm yetkileri vardır.
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+        if (userRole == "Admin")
+        {
+            return true;
+        }
+
+        // Personel için ilgili Claim'i kontrol et (Claim değeri string "True" olmalı).
+        var claimValue = User.FindFirstValue(claimType);
+
+        if (bool.TryParse(claimValue, out bool hasPermission) && hasPermission)
+        {
+            return true;
+        }
+
+        return false;
     }
 }

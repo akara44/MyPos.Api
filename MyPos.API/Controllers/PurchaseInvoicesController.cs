@@ -33,6 +33,10 @@ namespace MyPos.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> CreatePurchaseInvoice([FromBody] CreatePurchaseInvoiceDto createDto)
         {
+            if (!HasPermission("PurchaseInvoiceFullAccess"))
+            {
+                return StatusCode(403, new { message = "Satın alma faturası oluşturma yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var validationResult = await _createValidator.ValidateAsync(createDto);
@@ -145,6 +149,10 @@ namespace MyPos.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdatePurchaseInvoice(int id, [FromBody] UpdatePurchaseInvoiceDto updateDto)
         {
+            if (!HasPermission("PurchaseInvoiceFullAccess"))
+            {
+                return StatusCode(403, new { message = "Satın alma faturası güncelleme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var validationResult = await _updateValidator.ValidateAsync(updateDto);
@@ -283,6 +291,10 @@ namespace MyPos.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePurchaseInvoice(int id)
         {
+            if (!HasPermission("PurchaseInvoiceFullAccess"))
+            {
+                return StatusCode(403, new { message = "Satın alma faturası silme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -334,6 +346,10 @@ namespace MyPos.Api.Controllers
         [HttpGet("all")]
         public async Task<ActionResult<List<PurchaseInvoiceDetailsDto>>> GetAllPurchaseInvoices()
         {
+            if (!HasPermission("PurchaseInvoiceFullAccess"))
+            {
+                return StatusCode(403, new { message = "Satın alma faturalarını görüntüleme yetkiniz yok." });
+            }
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var invoices = await _context.PurchaseInvoices
@@ -368,6 +384,25 @@ namespace MyPos.Api.Controllers
             }).ToList();
 
             return Ok(dtoList);
+        }
+        private bool HasPermission(string claimType)
+        {
+            // Admin'in her zaman tüm yetkileri vardır.
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            if (userRole == "Admin")
+            {
+                return true;
+            }
+
+            // Personel için ilgili Claim'i kontrol et (Claim değeri string "True" olmalı).
+            var claimValue = User.FindFirstValue(claimType);
+
+            if (bool.TryParse(claimValue, out bool hasPermission) && hasPermission)
+            {
+                return true;
+            }
+
+            return false;
         }
     }
 }

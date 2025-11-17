@@ -36,6 +36,10 @@ public class DailyReportController : ControllerBase
     [HttpGet("daily-totals")]
     public async Task<ActionResult<DailySummaryDto>> GetDailyTotals()
     {
+        if (!HasPermission("DailyReport"))
+        {
+            return StatusCode(403, new { message = "Günlük raporları görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         // Sadece bugünün başlangıcını ve bitişini hesapla
@@ -153,6 +157,10 @@ public class DailyReportController : ControllerBase
     [HttpGet("daily-cash-flow")]
     public async Task<ActionResult<DailyCashFlowReportDto>> GetDailyCashFlowReport()
     {
+        if (!HasPermission("DailyReport"))
+        {
+            return StatusCode(403, new { message = "Günlük raporları görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         // Sadece bugünün başlangıcını ve bitişini hesapla
@@ -268,6 +276,10 @@ public class DailyReportController : ControllerBase
     [HttpGet("comprehensive-daily-summary")]
     public async Task<ActionResult<ComprehensiveDailySummaryDto>> GetComprehensiveDailySummary()
     {
+        if (!HasPermission("DailyReport"))
+        {
+            return StatusCode(403, new { message = "Günlük raporları görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var queryDate = DateTime.Today;
         var startOfDay = queryDate.ToUniversalTime();
@@ -425,6 +437,10 @@ public class DailyReportController : ControllerBase
     [HttpGet("daily-customer-payments")]
     public async Task<ActionResult<IEnumerable<DailyCustomerPaymentDetailDto>>> GetDailyCustomerPayments()
     {
+        if (!HasPermission("DailyReport"))
+        {
+            return StatusCode(403, new { message = "Günlük raporları görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         // Sadece bugünün başlangıcını ve bitişini hesapla (UTC Karşılığı)
@@ -457,6 +473,10 @@ public class DailyReportController : ControllerBase
     [HttpGet("daily-company-transactions")]
     public async Task<ActionResult<IEnumerable<DailyCompanyTransactionDto>>> GetDailyCompanyTransactions()
     {
+        if (!HasPermission("DailyReport"))
+        {
+            return StatusCode(403, new { message = "Günlük firma işlemlerini görüntüleme yetkiniz yok." });
+        }
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         // Sadece bugünün başlangıcını ve bitişini hesapla (UTC Karşılığı)
@@ -491,5 +511,24 @@ public class DailyReportController : ControllerBase
             .ToList();
 
         return Ok(groupedTransactions);
+    }
+    private bool HasPermission(string claimType)
+    {
+        // Admin'in her zaman tüm yetkileri vardır.
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+        if (userRole == "Admin")
+        {
+            return true;
+        }
+
+        // Personel için ilgili Claim'i kontrol et (Claim değeri string "True" olmalı).
+        var claimValue = User.FindFirstValue(claimType);
+
+        if (bool.TryParse(claimValue, out bool hasPermission) && hasPermission)
+        {
+            return true;
+        }
+
+        return false;
     }
 }
