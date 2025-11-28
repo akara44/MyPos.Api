@@ -243,5 +243,48 @@ public class DashboardController : ControllerBase
         };
 
         return Ok(result);
-    } 
+    }
+    [HttpGet("summary")]
+    public async Task<IActionResult> GetSalesSummary()
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Not: Pagination (Limit/Skip) front-end'de yapılacağı için burada tüm listeyi çekiyoruz.
+        // Hız için sadece gereken kolonları select ediyoruz.
+        var salesSummary = await _context.Sales
+            .Include(s => s.Customer) // Müşteri Adı için
+            .Where(s => s.UserId == currentUserId) // Sadece mevcut kullanıcıya ait satışları getir
+            .OrderByDescending(s => s.SaleDate) // En son yapılan satış en üstte
+            .Select(s => new SaleSummaryDto // Yalnızca tabloda görünecek alanları seç
+            {
+                SaleId = s.SaleId,
+                SaleCode = s.SaleCode,
+                CustomerName = s.Customer != null ? s.Customer.CustomerName : "Anonim Müşteri",
+                TotalQuantity = s.TotalQuantity,
+                TotalAmount = s.TotalAmount,
+                DiscountAmount = s.DiscountAmount,
+                PaymentType = s.PaymentType,
+                SaleDate = s.SaleDate,
+                IsCompleted = s.IsCompleted
+                // Personel sütunu her zaman mevcut kullanıcıyı temsil ettiği için burada eklenmedi,
+                // Front-end'de dinamik olarak gösterilebilir.
+            })
+            .ToListAsync();
+
+        return Ok(salesSummary);
+    }
+}
+
+// SaleController.cs veya ayrı bir DTO dosyanıza eklenecek
+public class SaleSummaryDto
+{
+    public int SaleId { get; set; }
+    public string SaleCode { get; set; } // Satış Kodu
+    public string CustomerName { get; set; } // Müşteri İsmi
+    public int TotalQuantity { get; set; } // Toplam Ürün (Adet)
+    public decimal TotalAmount { get; set; } // Toplam Tutar
+    public decimal DiscountAmount { get; set; } // İskonto
+    public string PaymentType { get; set; } // Ödeme Tipi
+    public DateTime SaleDate { get; set; } // Tarih
+    public bool IsCompleted { get; set; } // Uygulama (Tamamlanmış mı?)
 }
