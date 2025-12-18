@@ -27,13 +27,14 @@ public class SaleController : ControllerBase
     public async Task<IActionResult> CreateSale([FromBody] CreateSaleRequestDto request)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
+        var userSettings = await _context.UserSettings.FirstOrDefaultAsync(u => u.UserId == currentUserId);
+        bool blockIfNoStock = userSettings?.BlockSaleIfNoStock ?? false;
         var validationResult = _validator.Validate(request);
         if (!validationResult.IsValid)
             return BadRequest(new { errors = validationResult.Errors });
 
         // Muhtelif Tutar ve İskonto Kontrolleri (Zaten doğru çalışıyor)
-      
+
         // NOT: Muhtelif Tutar (MiscellaneousItems) zorunluluğu, içindeki DTO'da (Amount > 0.01) ve listenin boş olup olmaması kontrolü ile sağlanır.
 
         var productIds = request.SaleItems.Select(x => x.ProductId).ToList();
@@ -69,7 +70,7 @@ public class SaleController : ControllerBase
         {
             if (!products.TryGetValue(itemDto.ProductId, out var product))
                 return NotFound($"Ürün ID'si {itemDto.ProductId} bulunamadı.");
-            if (product.Stock < itemDto.Quantity)
+            if (blockIfNoStock && product.Stock < itemDto.Quantity)
                 return BadRequest($"Ürün '{product.Name}' için yeterli stok yok. Mevcut stok: {product.Stock}.");
 
             var saleItem = new SaleItem
@@ -255,6 +256,7 @@ public class SaleController : ControllerBase
     public async Task<IActionResult> FinalizeSale(int saleId, [FromBody] FinalizeSaleRequestDto request)
     {
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
 
         using var transaction = await _context.Database.BeginTransactionAsync();
         try

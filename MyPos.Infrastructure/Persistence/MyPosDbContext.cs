@@ -1,6 +1,6 @@
 ﻿using MyPos.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion; // BU SATIRI EKLEDİM
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion; 
 
 namespace MyPos.Infrastructure.Persistence
 {
@@ -29,8 +29,8 @@ namespace MyPos.Infrastructure.Persistence
         public DbSet<Sale> Sales { get; set; }
         public DbSet<SaleItem> SaleItems { get; set; }
         public DbSet<CompanyTransaction> CompanyTransactions { get; set; }
-        public DbSet<Debt> Debts { get; set; }  
-
+        public DbSet<Debt> Debts { get; set; }
+        public DbSet<UserSetting> UserSettings { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
