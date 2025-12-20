@@ -8,13 +8,15 @@ namespace MyPos.Application.Dtos.Customers
 {
     public class CreateCustomerDto
     {
-        // "Yeni Müşteri Oluştur" modalındaki alanlar
-        public string CustomerName { get; set; } // Müşteri Tanımı
-        public int DueDateInDays { get; set; }   // Vade Süresi
+        public string CustomerName { get; set; } // Ad veya Firma Ünvanı
+        public string? CustomerLastName { get; set; } // Soyad
+        public string? Email { get; set; } // E-posta
+        public string? CustomerType { get; set; } // Bireysel/Kurumsal seçimi için
+        public int DueDateInDays { get; set; }
         public string Phone { get; set; }
         public string Address { get; set; }
         public string CustomerNote { get; set; }
-        public decimal? OpenAccountLimit { get; set; } // Müşteri açık hesap limiti
+        public decimal? OpenAccountLimit { get; set; }
         public string TaxOffice { get; set; }
         public string TaxNumber { get; set; }
     }

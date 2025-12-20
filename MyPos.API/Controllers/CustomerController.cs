@@ -145,7 +145,6 @@ public class CustomerController : ControllerBase
 
     // --- DEĞİŞİKLİK 2: POST (Create) Metodu "CreateCustomerDto" Kullanıyor ---
     // Sadece hızlı kayıt formundaki verileri alır.
-
     [HttpPost]
     public async Task<ActionResult<GetCustomerDto>> CreateCustomer(CreateCustomerDto createDto)
     {
@@ -153,8 +152,13 @@ public class CustomerController : ControllerBase
 
         var customer = new Customer
         {
-            // CreateCustomerDto'dan gelen alanlar
+            // Yeni eklediğimiz alanlar
             CustomerName = createDto.CustomerName,
+            CustomerLastName = createDto.CustomerLastName,
+            Email = createDto.Email,
+            CustomerType = createDto.CustomerType ?? "Bireysel", // Boş gelirse varsayılan atar
+
+            // Mevcut alanlar
             DueDateInDays = createDto.DueDateInDays,
             Phone = createDto.Phone,
             Address = createDto.Address,
@@ -163,23 +167,17 @@ public class CustomerController : ControllerBase
             TaxOffice = createDto.TaxOffice,
             TaxNumber = createDto.TaxNumber,
 
-            // Otomatik veya varsayılan değerler
+            // Otomatik sistem değerleri
             UserId = currentUserId,
-            CustomerCode = Guid.NewGuid().ToString().Substring(0, 8).ToUpper(), // Örnek müşteri kodu
-            CustomerType = "Bireysel" // Varsayılan değer
+            CustomerCode = Guid.NewGuid().ToString().Substring(0, 8).ToUpper(),
+            Balance = 0
         };
-
-        // ÖNEMLİ: Artık DTO'ya özel bir validator kullanmalısın.
-        // var validator = new CreateCustomerDtoValidator();
-        // var validationResult = validator.Validate(createDto);
-        // if (!validationResult.IsValid) { return BadRequest(validationResult.Errors); }
 
         _context.Customers.Add(customer);
         await _context.SaveChangesAsync();
 
-        // Oluşturulan müşterinin tüm bilgilerini (GetCustomerDto) geri dönelim.
+        // Oluşturulan müşteriyi tam detayla geri dön
         var resultDto = await GetCustomer(customer.Id);
-
         return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, resultDto.Value);
     }
 
@@ -204,11 +202,13 @@ public class CustomerController : ControllerBase
             return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
         }
 
-        // Tüm alanları updateDto'dan alarak güncelle
+        // --- Güncellenen Alanlar ---
         existingCustomer.CustomerType = updateDto.CustomerType;
         existingCustomer.CustomerName = updateDto.CustomerName;
-        existingCustomer.CustomerLastName = updateDto.CustomerLastName;
-        existingCustomer.Email = updateDto.Email;
+        existingCustomer.CustomerLastName = updateDto.CustomerLastName; // Yeni
+        existingCustomer.Email = updateDto.Email; // Yeni
+
+        // Diğer mevcut alanların güncellenmesi
         existingCustomer.Phone = updateDto.Phone;
         existingCustomer.Country = updateDto.Country;
         existingCustomer.City = updateDto.City;
@@ -223,11 +223,6 @@ public class CustomerController : ControllerBase
         existingCustomer.PriceType = updateDto.PriceType;
         existingCustomer.CustomerNote = updateDto.CustomerNote;
 
-        // ÖNEMLİ: Artık DTO'ya özel bir validator kullanmalısın.
-        // var validator = new UpdateCustomerDtoValidator();
-        // var validationResult = validator.Validate(updateDto);
-        // if (!validationResult.IsValid) { return BadRequest(validationResult.Errors); }
-
         try
         {
             await _context.SaveChangesAsync();
@@ -236,7 +231,7 @@ public class CustomerController : ControllerBase
         {
             if (!_context.Customers.Any(e => e.Id == id && e.UserId == currentUserId))
             {
-                return NotFound("Müşteri bulunamadı veya yetkiniz yok.");
+                return NotFound("Müşteri bulunamadı.");
             }
             else
             {
